@@ -2,137 +2,353 @@ classdef DynModel2D
     
     properties
         name = 'Model2D_1';
-        bodies = [body2d.ground];
+        bodies = body2d.empty;
+        joints = struct('constrainedbody',cell(1),'relativebody',cell(1),...
+                        'joint',cell(1),'angleoffset',0,'numjoints',0); %joint info structure
+        groundslopeangle = sym(0);
+        M = sym([]); %Maximal Mass Matrix
+        C = sym([]); %Constraint Matrix
+        Cdot = sym([]); %Derivative of constraint matrix
+        G = sym([]); %Forces due to gravity
     end
     
     properties (Dependent = true)
-        numbodies
+        numbodies %number of rigid bodies
+        gravity
     end
     
     
     
     methods
         
+        %% Access Methods
         function numbodies = get.numbodies(this)
-           numbodies = length(this.bodies); 
+           numbodies = length(this.bodies);
+        end
+         
+        function this = set.bodies(this,newbodies)
+            
+            if ~isa(this.bodies,'body2d')
+               error('this.bodies must be of class "body2d"') 
+            end
+    
+            for i = 1:length(newbodies)
+               names{i} = newbodies(i).bodyname;
+            end
+            uniquenames = unique(names);
+            
+            if length(uniquenames)<length(newbodies)
+               error('You must assign a new name to each body in the model')
+            else
+                this.bodies = newbodies;
+            end
         end
         
-        function [this] = addBody(this,prevBody,varargin)
-            %Creates a new body that has at most one DOF from the body it
-            %connects to in the form of a hinge or a slider.  Must specify
-            %the body it connects to.  It will be fixed to prevBody by
-            %default.
+        function gravity = get.gravity(this)
+            gravity = sym([0;-1]);
+            alpha = this.groundslopeangle;
+            Rotation = [cos(alpha) sin(alpha); -sin(alpha) cos(alpha)];
+            gravity = Rotation*gravity;
+        end
+        
+        %% User-Input Model Specification
+        
+        function [this] = addBody(this,varargin)
+            %Creates a new bodye.  You can set
+            %its properties bodyname, mass, inertia, length (d), and lcom.            
+            mass = sym([]); inertia = sym([]); d = sym([]); lcom = sym([]); bodyname = char([]);
+            for i = 1 : 2 : length(varargin)
+                option = varargin{i};
+                val = varargin{i + 1};
+                switch option
+                    case 'mass'
+                        mass = val;
+                    case 'inertia'
+                        inertia = val;
+                    case 'd'
+                        d = val;
+                    case 'lcom'
+                        lcom = val;
+                    case 'bodyname'
+                        bodyname = val;
+                end
+            end
             
-            %'Hinge': set to 1 if you want a hinge joint
-            %'Slider': give it a 2D unit vector for the direction that you
-            %want it to slide.
-            % NOTE: you can't give the body a hinge and a slider.  Make 2
-            % separate bodies if you want to do this
-            %'Mass','Inertia','d','lcom' are all parameters of the class
-            %body2D that you can set as optional inputs here; otherwise,
-            %they will be the default values
-            
-            
-            hingeaxis = [];
-            RelativeTo = [];
-            slideraxis = [];
             Body = body2d;
+            BodyNames = this.getBodyNames;
+            BodyPropNames = fieldnames(Body.bodyprops);
+            oldnumberofbodies = this.numbodies;
+            
+            %Assign dynamic properties of the new body
+            for i = 1:length(BodyPropNames)
+               %Assign the property to user input value
+               Body.(BodyPropNames{i}) =  eval(BodyPropNames{i});
+               
+               %If user input no value, give it a default value based on
+               %the number of the body that is
+               if isempty(Body.(BodyPropNames{i}))
+                   Body.(BodyPropNames{i}) = eval( sprintf('sym('' %s%d '')', BodyPropNames{i}, oldnumberofbodies+1) );
+               end
+                
+            end
+            
+            %Assign body name based on user input
+            Body.bodyname = bodyname;
+            %If user input no value, give it name BodyX, where X is the
+            %number of the new body
+            if isempty(Body.bodyname)
+                Body.bodyname = eval( sprintf('Body%d', oldnumberofbodies+1) );
+            end
+            
+            if oldnumberofbodies~=0
+                this.bodies = [this.bodies Body];
+            else
+                this.bodies = Body;
+            end
+            
+        end
+        
+        function [this] = addJoint(this,constrainedbodyname,relativebodyname,joint,varargin)
+            %Stores the information of a new joint "joint" relative to the body2d
+            %"relativebody" in this.joints
+            
+            %angleoffset only pertains to joints "fixed" and "slider".  The
+            %value of angle offset determines the CCW rotational offset of
+            %constrainedbody relative to relativebody.
+            
+            angleoffset = 0; %only for fixed and slider joints
             
             for i = 1 : 2 : length(varargin)
                 option = varargin{i};
                 val = varargin{i + 1};
                 switch option
-                    case 'Hinge'
-                        hingeaxis = val;
-                        Body.joint = 'hinge';
-                    case 'RelativeTo'
-                        RelativeTo = val;
-                    case 'Slider'
-                        slideraxis = val;
-                        Body.joint = 'fixed';
-                    case 'Mass'
-                        Body.mass = val;
-                    case 'Inertia'
-                        Body.inertia = val;
-                    case 'd'
-                        Body.d = val;
-                    case 'lcom'
-                        Body.lcom = val;
+                    case 'angleoffset'
+                        angleoffset = val;
                 end
             end
             
-            
-            if ~isempty(hingeaxis) && ~isempty(slideraxis)
-               error('You can''t define both a hinge and a slider for a new body') 
+            if strcmp(joint,'Hinge')
+               angleoffset = 0; 
             end
             
-            bodynumber = this.numbodies + 1;
-            Body.bodynumber = bodynumber;
+            num = this.joints.numjoints+1;
+            
+            this.joints.numjoints = num;
+            this.joints.constrainedbody{num} = constrainedbodyname;
+            this.joints.relativebody{num} = relativebodyname;
+            this.joints.joint{num} = joint;
+            this.joints.angleoffset(num) = angleoffset;
+        
+        end
+        
+        %% Symbolic Dynamics Calculations
+        
+        function [this] = getConstraintMatrix(this)
+            %Creates a constraint matrix by interpreting the field
+            %this.constraints
+            
+            
+            j = this.joints;
+            numjoints = j.numjoints;
+            numbodies = this.numbodies;
+            dof = 3*(numbodies);
+            
+            %Create symbols for state variables
+            this.assignSymBodyStates;
+            
+            numconstraints = 0;
+            for k = 1:numjoints
+                
+                b1name = j.relativebody{k};
+                b2name = j.constrainedbody{k};
+                
+                %Assign symbolic variables to body 2
+                [b2,bnum2] = this.getBodyFromName(b2name);
+                [px2,py2,pang2] = getSymBodyStates(this,b2name);
+                
+                %Determine number of constraints imposed by joint k
+                joint = j.joint{k};
+                angleoffset = j.angleoffset(k);
+                if strcmp(joint,'hinge') || strcmp(joint,'slider')
+                    numconstraints = numconstraints + 2;
+                elseif strcmp(joint,'fixed')
+                    numconstraints = numconstraints + 3;
+                end
+                
+                if ~strcmp(b1name,'ground')
+                    %Assign state variables to body 1
+                    [b1,bnum1] = this.getBodyFromName(b1name);
+                    [px1,py1,pang1] = getSymBodyStates(this,b1name);
 
-            % Define position states as q1,...,qn and velocity states as
-            % u1,...,un, where n = number of bodies
-            
-            dofnumber = bodynumber-1;
-            
-            for i = 1:dofnumber
-                name = sprintf('q%d',i);
-                eval([sprintf('q%d',i) ' = sym(name);']);
-                uname = sprintf('u%d',i);
-                eval([sprintf('u%d',i) ' = sym(uname);']);
-                
-                qs(i)=eval(sprintf('q%d',i));
-                us(i)=eval(sprintf('u%d',i));
-            end
-            
-            prevpoint = prevBody.endpoint;
-            
-            if ~isempty(hingeaxis)
-                 Body.joint = 'hinge';
-                 
-%                 if isempty(RelativeTo)
-%                     angle = qs(bodynumber);
-%                 else
-%                     angle = qs(bodynumber) - this.angle(prevBodyNumber,1);
-%                 end
-                
-                angle = qs(dofnumber);
-                
-                direction = [cos(angle);sin(angle)];
-                
-                Body.endpoint(1:2,bodynumber) = prevpoint + Body.d*direction;
-                Body.compoint(1:2,bodynumber) = prevpoint + Body.lcom*direction;
-                Body.angle(1,bodynumber) = angle;
-                
-            elseif ~isempty(slideraxis)
-                
-                Body.joint = 'slider';
-                
-                if Body.d ~= Body.lcom
-                    Body.d = Body.lcom; %make endpoint of segment coincide with COM
-                    warning('Setting Body.d to Body.lcom because Body is connected to prevBody by a Slider joint')
+                    newconstraints = sym(zeros(1,dof));
+                    if strcmp(joint,'slider') || strcmp(joint,'fixed')
+                        % If not a hinge, set angular velocity of b2 to angular
+                        % velocity of b1
+                        newconstraints(1,[bnum1*3 bnum2*3]) = [-1 1];
+                        
+                        %Angle of constrainedbody
+                        alpha = pang1 + angleoffset;
+                        
+                        %Do not allow velocity perpendicular to the direction of
+                        %the body
+                        newconstraints(2,[bnum2*3-2 bnum2*3-1]) = [-sin(alpha) cos(alpha)];
+                    end
+                    
+                    %Do not allow velocity along the direction of the body
+                    if strcmp(joint,'fixed')
+                        newconstraints(3,[bnum2*3-2 bnum2*3-1]) = [cos(alpha) sin(alpha)];
+                    end
+                    
+                    if strcmp(joint,'hinge')
+                        dex = 3*bnum1-2; %The state corresponding to x-variable of b1
+                        newconstraints(1,[dex dex+2 dex+3 dex+5]) = [1 -(b1.d - b1.lcom)*sin(pang1) -1 -b2.lcom*sin(pang2)];
+                        newconstraints(2,[dex+1 dex+2 dex+4 dex+5]) = [1 (b1.d - b1.lcom)*cos(pang1) -1 b2.lcom*cos(pang2)];
+                    end
+                else
+                    b1 = body2d.ground;
+                    px1 = sym(0); py1 = sym(0); pang1 = sym(0);
+                    
+                    newconstraints = sym(zeros(1,dof));
+                    
+                    if strcmp(joint,'slider') || strcmp(joint,'fixed')
+                        % If not a hinge, set angular velocity of b2 to angular
+                        % velocity of b1
+                        newconstraints(1,[bnum2*3]) = [1];
+                        
+                        %Angle of constrainedbody
+                        alpha = pang1 + angleoffset;
+                        
+                        %Do not allow velocity perpendicular to the direction of
+                        %the body
+                        newconstraints(2,[bnum2*3-2 bnum2*3-1]) = [-sin(alpha) cos(alpha)];
+                    end
+                    
+                    %Do not allow velocity along the direction of the body
+                    if strcmp(joint,'fixed')
+                        newconstraints(3,[bnum2*3-2 bnum2*3-1]) = [cos(alpha) sin(alpha)];
+                    end
+                    
+                    if strcmp(joint,'hinge')
+                        dex = 3*bnum2-2; %The state corresponding to x-variable of b1
+                        newconstraints(1,[dex dex+2]) = [-1 -b2.lcom*sin(pang2)];
+                        newconstraints(2,[dex+1 dex+2]) = [-1 b2.lcom*cos(pang2)];
+                    end
+                    
                 end
+                %append constraints
+                this.C(numconstraints - size(newconstraints,1) + 1 : numconstraints,:) = newconstraints;
                 
-                
-                dist = qs(dofnumber);
-                
-                Body.endpoint(1:2,bodynumber,1:2) = prevpoint + dist*slideraxis;
-                Body.compoint(1:2,bodynumber,1:2) = prevpoint + dist*slideraxis;
-                Body.angle(1,bodynumber) = prevBody.angle;
-                
-            else %fixed joint
-                Body.joint = 'fixed';
-                
-                angle = prevBody.angle;
-                direction = [cos(angle);sin(angle)];
-                
-                Body.endpoint(1:2,bodynumber) = prevpoint + Body.d*direction;
-                Body.compoint(1:2,bodynumber) = prevpoint + Body.lcom*direction;
-                Body.angle(1,bodynumber) = angle;
             end
-            
-            this.bodies = [this.bodies Body];
             
         end
+        
+        function [this] = getConstraintMatrixDot(this)
+            if isempty(this.C)
+                this = this.getConstraintMatrix;
+            end
+            C = this.C;
+            
+            [nconstraints,nstates] = size(C);
+            numbodies = this.numbodies;
+            
+            Cdot = sym(zeros(size(C)));
+            this.assignSymBodyStates;
+            types = [{'x'} {'y'} {'ang'}];
+            
+            for i = 1:nconstraints %each row-element of Cdot
+                for j = 1:nstates %each column-element of Cdot
+                    for k = 1:numbodies %each body in the model
+                        for t = 1:length(types) %each state of the body (x,y,ang)
+                            %Take the partial derivative of C(i,j) w.r.t.
+                            %to state types(t) of body k
+                            Cdot(i,j) = eval(sprintf('Cdot(i,j) + diff(C(i,j),%s%d)*v%s%d',types{t},k,types{t},k));
+                        end
+                    end
+                end
+            end
+            
+            this.Cdot = Cdot;
+            
+            
+        end
+        
+        function [this] = getGravityForces(this)
+            numbodies = this.numbodies;
+            G = sym(zeros(1,numbodies*3));
+            
+            for i = 1:numbodies
+                graveffect = this.bodies(i).mass*this.gravity;
+                G(1,3*(i-1)+1) = graveffect(1);
+                G(1,3*(i-1)+2) = graveffect(2);
+                G(1,3*(i-1)+3) = 0;
+            end
+            
+            this.G = G;
+        end
+        
+        function [this] = getMassMatrix(this)
+            
+            numbodies = this.numbodies;
+            
+            M = sym(zeros(numbodies*3));
+            
+            for i = 1:numbodies
+                M(3*(i-1)+1,3*(i-1)+1) = this.bodies(i).mass;
+                M(3*(i-1)+2,3*(i-1)+2) = this.bodies(i).mass;
+                M(3*(i-1)+3,3*(i-1)+3) = this.bodies(i).inertia;
+            end
+            
+            this.M = M;
+        end
+        
+        function [this] = getRHS(this)
+           ExternalForces 
+        end
+        
+        %% Events
+        
+        %% Housekeeping
+        
+        function [body,bodynum] = getBodyFromName(this,bodyname)
+            for i = 1:this.numbodies
+                if strcmp(this.bodies(i).bodyname,bodyname)
+                   body = this.bodies(i);
+                   bodynum = i;
+                   break;
+                end
+            end
+        end
+        
+        function [x,y,ang] = getSymBodyStates(this,bodyname)
+            [~,bodynum] = this.getBodyFromName(bodyname);
+            x = sym(sprintf('x%d',bodynum));
+            y = sym(sprintf('y%d',bodynum));
+            ang = sym(sprintf('ang%d',bodynum));
+        end
+        
+        function [] = assignSymBodyStates(this)
+            numbodies = this.numbodies;
+            ws = 'caller';
+                        %Create symbols for state variables
+            for i = 1:numbodies
+                assignin(ws, sprintf('x%d',i), eval(sprintf('sym(''x%d'');',i)) );
+                assignin(ws, sprintf('y%d',i), eval(sprintf('sym(''y%d'');',i)) );
+                assignin(ws, sprintf('ang%d',i), eval(sprintf('sym(''ang%d'');',i)) );
+                assignin(ws, sprintf('vx%d',i), eval(sprintf('sym(''vx%d'');',i)) );
+                assignin(ws, sprintf('vy%d',i), eval(sprintf('sym(''vy%d'');',i)) );
+                assignin(ws, sprintf('vang%d',i), eval(sprintf('sym(''vang%d'');',i)) );
+            end
+        end
+        
+        function BodyNames = getBodyNames(this)
+            BodyNames = cell(1,this.numbodies);
+            for i = 1:this.numbodies;
+               BodyNames{1,i} = this.bodies(i).bodyname;
+            end
+        end
+        
+        
+        
     end
     
 end

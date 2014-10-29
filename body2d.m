@@ -1,34 +1,27 @@
 classdef body2d
+    %A 2-d rigid body, to be used in an instance of DynModel2D.
+    
     
     properties
-        bodynumber = 1; %give each body a number
+        bodyname = 'Body0';
         mass = sym('1'); 
         inertia = sym('0'); 
-        d = sym('1'); %distance between previous body and the connection of the next body.  should be equal to lcom if it is a slider joint
-        lcom = sym('.5'); %distance between previous body and center of mass
-        joint='fixed'; %type of joint
-         
-        endpoint = sym([0;0]);
-        compoint=sym([0 0]);
-        angle = sym('0');
+        d = sym('1'); %distance from start of body to end of body
+        lcom = sym('.5'); %distance between start of body to COM of body
     end
     
     properties (Dependent = true)
-        axes
+        bodyprops
     end
     
     methods (Static)
        
         function [ground] = ground()
            ground = body2d;
-           ground.bodynumber = 1;
+           ground.bodyname = 'ground';
            ground.mass = sym('0');
            ground.d = sym('0');
            ground.lcom = sym('0');
-           ground.endpoint = sym([0;0]);
-           ground.compoint=sym([0 0]);
-           ground.angle = sym('0');
-           ground.joint = 'fixed';
         end
         
     end
@@ -36,8 +29,11 @@ classdef body2d
     
     methods
         
-        function axes = get.axes(this)
-            axes = [cos(this.angle);sin(this.angle)];
+        function bodyprops = get.bodyprops(this)
+            bodyprops.mass = this.mass;
+            bodyprops.inertia = this.inertia;
+            bodyprops.d = this.d;
+            bodyprops.lcom = this.lcom;
         end
         
         function [] = getParams(this)
