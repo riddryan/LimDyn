@@ -75,7 +75,6 @@ classdef DynModel2D
             end
             
             Body = body2d;
-            BodyNames = this.getBodyNames;
             BodyPropNames = fieldnames(Body.bodyprops);
             oldnumberofbodies = this.numbodies;
             
@@ -205,34 +204,34 @@ classdef DynModel2D
                         newconstraints(2,[dex+1 dex+2 dex+4 dex+5]) = [1 (b1.d - b1.lcom)*cos(pang1) -1 b2.lcom*cos(pang2)];
                     end
                 else
-                    b1 = body2d.ground;
-                    px1 = sym(0); py1 = sym(0); pang1 = sym(0);
-                    
-                    newconstraints = sym(zeros(1,dof));
-                    
-                    if strcmp(joint,'slider') || strcmp(joint,'fixed')
-                        % If not a hinge, set angular velocity of b2 to angular
-                        % velocity of b1
-                        newconstraints(1,[bnum2*3]) = [1];
-                        
-                        %Angle of constrainedbody
-                        alpha = pang1 + angleoffset;
-                        
-                        %Do not allow velocity perpendicular to the direction of
-                        %the body
-                        newconstraints(2,[bnum2*3-2 bnum2*3-1]) = [-sin(alpha) cos(alpha)];
-                    end
-                    
-                    %Do not allow velocity along the direction of the body
-                    if strcmp(joint,'fixed')
-                        newconstraints(3,[bnum2*3-2 bnum2*3-1]) = [cos(alpha) sin(alpha)];
-                    end
-                    
-                    if strcmp(joint,'hinge')
-                        dex = 3*bnum2-2; %The state corresponding to x-variable of b1
-                        newconstraints(1,[dex dex+2]) = [-1 -b2.lcom*sin(pang2)];
-                        newconstraints(2,[dex+1 dex+2]) = [-1 b2.lcom*cos(pang2)];
-                    end
+%                     b1 = body2d.ground;
+%                     px1 = sym(0); py1 = sym(0); pang1 = sym(0);
+%                     
+%                     newconstraints = sym(zeros(1,dof));
+%                     
+%                     if strcmp(joint,'slider') || strcmp(joint,'fixed')
+%                         % If not a hinge, set angular velocity of b2 to angular
+%                         % velocity of b1
+%                         newconstraints(1,[bnum2*3]) = [1];
+%                         
+%                         %Angle of constrainedbody
+%                         alpha = pang1 + angleoffset;
+%                         
+%                         %Do not allow velocity perpendicular to the direction of
+%                         %the body
+%                         newconstraints(2,[bnum2*3-2 bnum2*3-1]) = [-sin(alpha) cos(alpha)];
+%                     end
+%                     
+%                     %Do not allow velocity along the direction of the body
+%                     if strcmp(joint,'fixed')
+%                         newconstraints(3,[bnum2*3-2 bnum2*3-1]) = [cos(alpha) sin(alpha)];
+%                     end
+%                     
+%                     if strcmp(joint,'hinge')
+%                         dex = 3*bnum2-2; %The state corresponding to x-variable of b1
+%                         newconstraints(1,[dex dex+2]) = [-1 -b2.lcom*sin(pang2)];
+%                         newconstraints(2,[dex+1 dex+2]) = [-1 b2.lcom*cos(pang2)];
+%                     end
                     
                 end
                 %append constraints
@@ -274,13 +273,13 @@ classdef DynModel2D
         
         function [this] = getGravityForces(this)
             numbodies = this.numbodies;
-            G = sym(zeros(1,numbodies*3));
+            G = sym(zeros(numbodies*3,1));
             
             for i = 1:numbodies
                 graveffect = this.bodies(i).mass*this.gravity;
-                G(1,3*(i-1)+1) = graveffect(1);
-                G(1,3*(i-1)+2) = graveffect(2);
-                G(1,3*(i-1)+3) = 0;
+                G(3*(i-1)+1,1) = graveffect(1);
+                G(3*(i-1)+2,1) = graveffect(2);
+                G(3*(i-1)+3,1) = 0;
             end
             
             this.G = G;
@@ -310,6 +309,12 @@ classdef DynModel2D
         %% Housekeeping
         
         function [body,bodynum] = getBodyFromName(this,bodyname)
+            
+            if strcmp('ground',bodyname)
+                body = body2d.ground;
+                bodynum = 0;
+                return;
+            end
             for i = 1:this.numbodies
                 if strcmp(this.bodies(i).bodyname,bodyname)
                    body = this.bodies(i);
@@ -320,6 +325,14 @@ classdef DynModel2D
         end
         
         function [x,y,ang] = getSymBodyStates(this,bodyname)
+            
+            if strcmp('ground',bodyname)
+               x = sym(0);
+               y = sym(0);
+               ang = sym(0);
+               return;
+            end
+            
             [~,bodynum] = this.getBodyFromName(bodyname);
             x = sym(sprintf('x%d',bodynum));
             y = sym(sprintf('y%d',bodynum));
