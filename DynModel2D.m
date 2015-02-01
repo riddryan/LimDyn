@@ -5,16 +5,22 @@ classdef DynModel2D
         bodies = body2d.empty;
         joints = struct('constrainedbody',cell(1),'relativebody',cell(1),...
                         'joint',cell(1),'angleoffset',0,'numjoints',0); %joint info structure
+        springs = struct('body1',cell(1),'body2',cell(1),'type',cell(1),'name',cell(1),'restlength',cell(1),'numsprings',0);
+        dampers = struct('body1',cell(1),'body2',cell(1),'type',cell(1),'name',cell(1),'numdampers',0);
         groundslopeangle = sym(0);
         M = sym([]); %Maximal Mass Matrix
         C = sym([]); %Constraint Matrix
         Cdot = sym([]); %Derivative of constraint matrix
         G = sym([]); %Forces due to gravity
+        ExForces = sym([]); %External Forces (springs, dampers, etc.)
     end
     
     properties (Dependent = true)
         numbodies %number of rigid bodies
         gravity
+        dof
+        posdexes
+        veldexes
     end
     
     
@@ -24,6 +30,18 @@ classdef DynModel2D
         %% Access Methods
         function numbodies = get.numbodies(this)
            numbodies = length(this.bodies);
+        end
+        
+        function dof = get.dof(this)
+            dof = 3*this.numbodies;
+        end
+        
+        function posdexes = get.posdexes(this)
+           posdexes = 1:(this.dof/2); 
+        end
+        
+        function veldexes = get.veldexes(this)
+            veldexes = (this.dof/2+1):this.dof;
         end
          
         function this = set.bodies(this,newbodies)
@@ -91,12 +109,13 @@ classdef DynModel2D
                 
             end
             
-            %Assign body name based on user input
-            Body.bodyname = bodyname;
+
             %If user input no value, give it name BodyX, where X is the
             %number of the new body
-            if isempty(Body.bodyname)
+            if isempty(bodyname)
                 Body.bodyname = eval( sprintf('Body%d', oldnumberofbodies+1) );
+            else %Assign body name based on user input
+                 Body.bodyname = bodyname;
             end
             
             if oldnumberofbodies~=0
@@ -140,6 +159,98 @@ classdef DynModel2D
         
         end
         
+        function [this] = addSpring(this,body1name,body2name,varargin)
+            type = 'linear';
+            springname = [];
+            restlength = [];
+            
+            for i = 1 : 2 : length(varargin)
+                option = varargin{i};
+                val = varargin{i + 1};
+                switch option
+                    case 'type'
+                        type = val;
+                    case 'springname'
+                        springname = val;
+                    case 'restlength'
+                        restlength = val;
+                end
+            end
+            
+            if ~strcmp(type,'linear') || ~strcmp(type,'angular')
+                error('Unknown spring type.  Must pick linear or angular');
+            end
+            
+            num = this.springs.numsprings+1;
+            
+            if ~isempty(springname)
+                this.springs.name = springname;
+            else
+                this.springs.name = sym(sprintf('k%d',num));
+            end
+            
+            if ~isempty(restlength)
+                this.springs.restlength = restlength;
+            else
+                this.springs.restlength = sym(sprintf('springlength%d',num));
+            end
+            this.springs.numsprings = num;
+            this.springs.body1{num} = body1name;
+            this.springs.body2{num} = body2name;
+            this.springs.type{num} = type;
+        end
+        
+        function [this] = addDamper(this,body1name,body2name,varargin)
+            type = 'linear';
+            dampername = [];
+            
+            for i = 1 : 2 : length(varargin)
+                option = varargin{i};
+                val = varargin{i + 1};
+                switch option
+                    case 'type'
+                        type = val;
+                    case 'dampername'
+                        dampername = val;
+                end
+            end
+            
+            if ~strcmp(type,'linear') || ~strcmp(type,'angular')
+                error('Unknown damper type.  Must pick linear or angular');
+            end
+            
+            num = this.dampers.numdampers+1;
+            
+            if ~isempty(dampername)
+                this.dampers.name = dampername;
+            else
+                this.dampers.name = sym(sprintf('c%d',num));
+            end
+            
+            this.dampers.numdampers = num;
+            this.dampers.body1{num} = body1name;
+            this.dampers.body2{num} = body2name;
+            this.dampers.type{num} = type;
+        end
+        %% Symbolic Kinematics Calculations
+        
+        function [poscom] = PosCOM(this,body,varargin)
+            RelTo = 'ground';
+            
+            for i = 1 : 2 : length(varargin)
+                option = varargin{i};
+                val = varargin{i + 1};
+                switch option
+                    case 'RelTo'
+                        RelTo = val;
+                end
+            end
+            
+            poscom=[];
+            
+            
+            
+        end
         %% Symbolic Dynamics Calculations
         
         function [this] = getConstraintMatrix(this)
@@ -150,7 +261,7 @@ classdef DynModel2D
             j = this.joints;
             numjoints = j.numjoints;
             numbodies = this.numbodies;
-            dof = 3*(numbodies);
+            dof = this.dof;
             
             %Create symbols for state variables
             this.assignSymBodyStates;
@@ -161,6 +272,9 @@ classdef DynModel2D
                 b1name = j.relativebody{k};
                 b2name = j.constrainedbody{k};
                 
+                %Assign state variables to body 1
+                [b1,bnum1] = this.getBodyFromName(b1name);
+                [px1,py1,pang1] = getSymBodyStates(this,b1name);
                 %Assign symbolic variables to body 2
                 [b2,bnum2] = this.getBodyFromName(b2name);
                 [px2,py2,pang2] = getSymBodyStates(this,b2name);
@@ -174,65 +288,39 @@ classdef DynModel2D
                     numconstraints = numconstraints + 3;
                 end
                 
-                if ~strcmp(b1name,'ground')
-                    %Assign state variables to body 1
-                    [b1,bnum1] = this.getBodyFromName(b1name);
-                    [px1,py1,pang1] = getSymBodyStates(this,b1name);
-
-                    newconstraints = sym(zeros(1,dof));
-                    if strcmp(joint,'slider') || strcmp(joint,'fixed')
-                        % If not a hinge, set angular velocity of b2 to angular
-                        % velocity of b1
+                newconstraints = sym(zeros(1,dof));
+                if strcmp(joint,'slider') || strcmp(joint,'fixed')
+                    % If not a hinge, set angular velocity of b2 to angular
+                    % velocity of b1
+                    if ~strcmp(b1name,'ground')
                         newconstraints(1,[bnum1*3 bnum2*3]) = [-1 1];
-                        
-                        %Angle of constrainedbody
-                        alpha = pang1 + angleoffset;
-                        
-                        %Do not allow velocity perpendicular to the direction of
-                        %the body
-                        newconstraints(2,[bnum2*3-2 bnum2*3-1]) = [-sin(alpha) cos(alpha)];
+                    else
+                        newconstraints(1,[bnum2*3]) = [1];
                     end
                     
-                    %Do not allow velocity along the direction of the body
-                    if strcmp(joint,'fixed')
-                        newconstraints(3,[bnum2*3-2 bnum2*3-1]) = [cos(alpha) sin(alpha)];
-                    end
+                    %Angle of constrainedbody
+                    alpha = pang1 + angleoffset;
                     
-                    if strcmp(joint,'hinge')
+                    %Do not allow velocity perpendicular to the direction of
+                    %the body
+                    newconstraints(2,[bnum2*3-2 bnum2*3-1]) = [-sin(alpha) cos(alpha)];
+                end
+                
+                %Do not allow velocity along the direction of the body
+                if strcmp(joint,'fixed')
+                    newconstraints(3,[bnum2*3-2 bnum2*3-1]) = [cos(alpha) sin(alpha)];
+                end
+                
+                if strcmp(joint,'hinge')
+                    if ~strcmp(b1name,'ground')
                         dex = 3*bnum1-2; %The state corresponding to x-variable of b1
                         newconstraints(1,[dex dex+2 dex+3 dex+5]) = [1 -(b1.d - b1.lcom)*sin(pang1) -1 -b2.lcom*sin(pang2)];
                         newconstraints(2,[dex+1 dex+2 dex+4 dex+5]) = [1 (b1.d - b1.lcom)*cos(pang1) -1 b2.lcom*cos(pang2)];
+                    else
+                        dex = 3*bnum2-2; %The state corresponding to x-variable of b1
+                        newconstraints(1,[dex dex+2]) = [-1 -b2.lcom*sin(pang2)];
+                        newconstraints(2,[dex+1 dex+2]) = [-1 b2.lcom*cos(pang2)];
                     end
-                else
-%                     b1 = body2d.ground;
-%                     px1 = sym(0); py1 = sym(0); pang1 = sym(0);
-%                     
-%                     newconstraints = sym(zeros(1,dof));
-%                     
-%                     if strcmp(joint,'slider') || strcmp(joint,'fixed')
-%                         % If not a hinge, set angular velocity of b2 to angular
-%                         % velocity of b1
-%                         newconstraints(1,[bnum2*3]) = [1];
-%                         
-%                         %Angle of constrainedbody
-%                         alpha = pang1 + angleoffset;
-%                         
-%                         %Do not allow velocity perpendicular to the direction of
-%                         %the body
-%                         newconstraints(2,[bnum2*3-2 bnum2*3-1]) = [-sin(alpha) cos(alpha)];
-%                     end
-%                     
-%                     %Do not allow velocity along the direction of the body
-%                     if strcmp(joint,'fixed')
-%                         newconstraints(3,[bnum2*3-2 bnum2*3-1]) = [cos(alpha) sin(alpha)];
-%                     end
-%                     
-%                     if strcmp(joint,'hinge')
-%                         dex = 3*bnum2-2; %The state corresponding to x-variable of b1
-%                         newconstraints(1,[dex dex+2]) = [-1 -b2.lcom*sin(pang2)];
-%                         newconstraints(2,[dex+1 dex+2]) = [-1 b2.lcom*cos(pang2)];
-%                     end
-                    
                 end
                 %append constraints
                 this.C(numconstraints - size(newconstraints,1) + 1 : numconstraints,:) = newconstraints;
@@ -300,8 +388,83 @@ classdef DynModel2D
             this.M = M;
         end
         
-        function [this] = getRHS(this)
-           ExternalForces 
+        function [this] = getExForces(this)
+            numsprings = this.springs.numsprings;
+            numdampers = this.dampers.numdampers;
+            dof = this.dof;
+            for i = 1:numsprings
+                b1name = this.springs.body1{i};
+                b2name = this.springs.body2{i};
+                
+                %Assign state variables to body 1
+                [b1,bnum1] = this.getBodyFromName(b1name);
+                [px1,py1,pang1] = getSymBodyStates(this,b1name);
+                %Assign symbolic variables to body 2
+                [b2,bnum2] = this.getBodyFromName(b2name);
+                [px2,py2,pang2] = getSymBodyStates(this,b2name);
+                
+                newspringforces = sym(zeros(dof,1));
+                if strcmp(type,'linear')
+                    angle = atan((py2-py1)/(px2-px1));
+                    if ~strcmp(b1name,'ground')
+                        newspringforces([3*bnum1-2 3*bnum1-1]) = -this.springs.name{i}*[(px1 - px2 - this.springs.restlength{i}*cos(angle)) (py1 - py2 - this.springs.restlength{i}*sin(angle))];
+                        newspringforces([3*bnum2-2 3*bnum2-1]) = this.springs.name{i}*[(px1 - px2 - this.springs.restlength{i}*cos(angle)) (py1 - py2 - this.springs.restlength{i}*sin(angle))];
+                    else
+                        newspringforces([3*bnum2-2 3*bnum2-1]) = -this.springs.name{i}*[(px1 - px2 - this.springs.restlength{i}*cos(angle)) (py1 - py2 - this.springs.restlength{i}*sin(angle))];
+                    end
+                else
+                    if ~strcmp(b1name,'ground')
+                        newspringforces([3*bnum1]) = -this.springs.name{i}*(ang1 - ang2 - this.springs.restlength{i});
+                        newspringforces([3*bnum2]) = this.springs.name{i}*(ang2 - ang2 - this.springs.restlength{i});
+                    else
+                        newspringforces([3*bnum2]) = -this.springs.name{i}*(ang1 - ang2 - this.springs.restlength{i});
+                    end
+                end
+                this.ExForces = this.ExForces + newspringforces;
+            end
+            
+            for i = 1:numdampers
+                b1name = this.dampers.body1{i};
+                b2name = this.dampers.body2{i};
+                
+                %Assign state variables to body 1
+                [b1,bnum1] = this.getBodyFromName(b1name);
+                [px1,py1,pang1] = getSymBodyStates(this,b1name);
+                [vx1,vy1,vang1] = getSymBodyVels(this,b1name);
+                %Assign symbolic variables to body 2
+                [b2,bnum2] = this.getBodyFromName(b2name);
+                [px2,py2,pang2] = getSymBodyStates(this,b2name);
+                [vx2,vy2,vang2] = getSymBodyVels(this,b1name);
+                
+                newdamperforces = sym(zeros(dof,1));
+                if strcmp(type,'linear')
+                    if ~strcmp(b1name,'ground')
+                        newdamperforces([3*bnum1-2 3*bnum1-1]) = -this.dampers.name{i}*[(vx1-vx2) (vy1-vy2)];
+                        newdamperforces([3*bnum2-2 3*bnum2-1]) =  this.dampers.name{i}*[(vx1-vx2) (vy1-vy2)];
+                    else
+                        newdamperforces([3*bnum2-2 3*bnum2-1]) = -this.dampers.name{i}*[(vx1-vx2) (vy1-vy2)];
+                    end
+                else
+                    if ~strcmp(b1name,'ground')
+                        newdamperforces([3*bnum1]) = -this.dampers.name{i}*(vang1 - vang2);
+                        newdamperforces([3*bnum2]) = this.dampers.name{i}*(vang1 - vang2);
+                    else
+                        newdamperforces([3*bnum2]) = -this.dampers.name{i}*(vang1 - vang2);
+                    end
+                end
+                this.ExForces = this.ExForces + newdamperforces;
+            end
+        end
+        
+        %% Simulation
+        function [xddot,constraintforces] = XDoubleDot(this,time,state)
+                RHS = [this.G + this.ExForces; -this.Cdot*state(this.veldexes)];
+                bigM = [this.M this.C.'; this.C zeros(size(this.C.'))];
+                AccsAndConstraints = bigM \ RHS;
+                
+                accs = AccsAndConstraints(1:this.dof/2);
+                xddot = [state(this.posdexes);accs];
+                constraintforces = AccsAndConstraints(this.dof/2+1:end);
         end
         
         %% Events
@@ -337,6 +500,21 @@ classdef DynModel2D
             x = sym(sprintf('x%d',bodynum));
             y = sym(sprintf('y%d',bodynum));
             ang = sym(sprintf('ang%d',bodynum));
+        end
+        
+        function [vx,vy,vang] = getSymBodyVels(this,bodyname)
+            
+            if strcmp('ground',bodyname)
+                vx = sym(0);
+                vy = sym(0);
+                vang = sym(0);
+                return;
+            end
+            
+            [~,bodynum] = this.getBodyFromName(bodyname);
+            vx = sym(sprintf('vx%d',bodynum));
+            vy = sym(sprintf('vy%d',bodynum));
+            vang = sym(sprintf('vang%d',bodynum));
         end
         
         function [] = assignSymBodyStates(this)
