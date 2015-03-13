@@ -1,5 +1,6 @@
 classdef DynModel2D
-    
+    %A model defined by bodies, joints, and exteral forces which produce
+    %symbolically defined dynamics equations and matrices.  
     properties
         name = 'Model2D_1';
         bodies = body2d.empty;
@@ -260,11 +261,11 @@ classdef DynModel2D
             
             j = this.joints;
             numjoints = j.numjoints;
-            numbodies = this.numbodies;
             dof = this.dof;
             
             %Create symbols for state variables
             this.assignSymBodyStates;
+            vels = this.SymVels;
             
             numconstraints = 0;
             for k = 1:numjoints
@@ -272,12 +273,11 @@ classdef DynModel2D
                 b1name = j.relativebody{k};
                 b2name = j.constrainedbody{k};
                 
-                %Assign state variables to body 1
+                %Assign state variables to bodies
                 [b1,bnum1] = this.getBodyFromName(b1name);
-                [px1,py1,pang1] = getSymBodyStates(this,b1name);
-                %Assign symbolic variables to body 2
+                [x1,y1,ang1,vx1,vy1,vang1] = getSymBodyStates(this,b1name);
                 [b2,bnum2] = this.getBodyFromName(b2name);
-                [px2,py2,pang2] = getSymBodyStates(this,b2name);
+                [x2,y2,ang2,vx2,vy2,vang2] = getSymBodyStates(this,b2name);
                 
                 %Determine number of constraints imposed by joint k
                 joint = j.joint{k};
@@ -288,40 +288,28 @@ classdef DynModel2D
                     numconstraints = numconstraints + 3;
                 end
                 
-                newconstraints = sym(zeros(1,dof));
+                newconstraints = sym(numconstraints,1);
                 if strcmp(joint,'slider') || strcmp(joint,'fixed')
                     % If not a hinge, set angular velocity of b2 to angular
                     % velocity of b1
-                    if ~strcmp(b1name,'ground')
-                        newconstraints(1,[bnum1*3 bnum2*3]) = [-1 1];
-                    else
-                        newconstraints(1,[bnum2*3]) = [1];
-                    end
-                    
+                    newconstraints(1) = vang1 - vang2 == 0;
                     %Angle of constrainedbody
-                    alpha = pang1 + angleoffset;
-                    
+                    alpha = ang1 + angleoffset;
                     %Do not allow velocity perpendicular to the direction of
                     %the body
-                    newconstraints(2,[bnum2*3-2 bnum2*3-1]) = [-sin(alpha) cos(alpha)];
+                    newconstraints(2) = vx1*-sin(alpha) + vx2*cos(alpha) == 0;
                 end
                 
                 %Do not allow velocity along the direction of the body
                 if strcmp(joint,'fixed')
-                    newconstraints(3,[bnum2*3-2 bnum2*3-1]) = [cos(alpha) sin(alpha)];
+                    newconstraints(2) = vx1*cos(alpha) + vx2*sin(alpha) == 0;
                 end
                 
                 if strcmp(joint,'hinge')
-                    if ~strcmp(b1name,'ground')
-                        dex = 3*bnum1-2; %The state corresponding to x-variable of b1
-                        newconstraints(1,[dex dex+2 dex+3 dex+5]) = [1 -(b1.d - b1.lcom)*sin(pang1) -1 -b2.lcom*sin(pang2)];
-                        newconstraints(2,[dex+1 dex+2 dex+4 dex+5]) = [1 (b1.d - b1.lcom)*cos(pang1) -1 b2.lcom*cos(pang2)];
-                    else
-                        dex = 3*bnum2-2; %The state corresponding to x-variable of b1
-                        newconstraints(1,[dex dex+2]) = [-1 -b2.lcom*sin(pang2)];
-                        newconstraints(2,[dex+1 dex+2]) = [-1 b2.lcom*cos(pang2)];
-                    end
+                    newconstraints(1) = vx1 - (b1.d - b1.lcom)*sin(ang1)*vang1 - vx2 - b2.lcom*sin(ang2)*vang2 == 0;
+                    newconstraints(2) = vy1 + (b1.d - b1.lcom)*cos(ang1)*vang1 - vy2 + b2.lcom*cos(ang2)*vang2 == 0;
                 end
+                newconstraints = equationsToMatrix(newconstraints,vels);
                 %append constraints
                 this.C(numconstraints - size(newconstraints,1) + 1 : numconstraints,:) = newconstraints;
                 
@@ -487,12 +475,12 @@ classdef DynModel2D
             end
         end
         
-        function [x,y,ang] = getSymBodyStates(this,bodyname)
+        function [x,y,ang,vx,vy,vang] = getSymBodyStates(this,bodyname)
             
             if strcmp('ground',bodyname)
-               x = sym(0);
-               y = sym(0);
-               ang = sym(0);
+               x = sym(0); vx = sym(0);
+               y = sym(0); vy = sym(0);
+               ang = sym(0); vang = sym(0);
                return;
             end
             
@@ -500,18 +488,6 @@ classdef DynModel2D
             x = sym(sprintf('x%d',bodynum));
             y = sym(sprintf('y%d',bodynum));
             ang = sym(sprintf('ang%d',bodynum));
-        end
-        
-        function [vx,vy,vang] = getSymBodyVels(this,bodyname)
-            
-            if strcmp('ground',bodyname)
-                vx = sym(0);
-                vy = sym(0);
-                vang = sym(0);
-                return;
-            end
-            
-            [~,bodynum] = this.getBodyFromName(bodyname);
             vx = sym(sprintf('vx%d',bodynum));
             vy = sym(sprintf('vy%d',bodynum));
             vang = sym(sprintf('vang%d',bodynum));
@@ -529,6 +505,15 @@ classdef DynModel2D
                 assignin(ws, sprintf('vy%d',i), eval(sprintf('sym(''vy%d'');',i)) );
                 assignin(ws, sprintf('vang%d',i), eval(sprintf('sym(''vang%d'');',i)) );
             end
+        end
+        
+        function vels = SymVels(this)
+           numbodies = this.numbodies;
+           vxs = sym('vx',[1 numbodies]);
+           vys = sym('vy',[1 numbodies]);
+           vangs = sym('vang',[1 numbodies]);
+           vels = [vxs; vys; vangs];
+           vels = reshape(vels,numbodies*3,1);
         end
         
         function BodyNames = getBodyNames(this)
