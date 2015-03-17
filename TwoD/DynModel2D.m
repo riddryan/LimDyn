@@ -178,7 +178,7 @@ classdef DynModel2D
                 end
             end
             
-            if ~strcmp(type,'linear') || ~strcmp(type,'angular')
+            if ~strcmp(type,'linear') && ~strcmp(type,'angular')
                 error('Unknown spring type.  Must pick linear or angular');
             end
             
@@ -216,7 +216,7 @@ classdef DynModel2D
                 end
             end
             
-            if ~strcmp(type,'linear') || ~strcmp(type,'angular')
+            if ~strcmp(type,'linear') && ~strcmp(type,'angular')
                 error('Unknown damper type.  Must pick linear or angular');
             end
             
@@ -288,7 +288,7 @@ classdef DynModel2D
                     numconstraints = numconstraints + 3;
                 end
                 
-                newconstraints = sym(numconstraints,1);
+                newconstraints = sym(zeros(numconstraints,1));
                 if strcmp(joint,'slider') || strcmp(joint,'fixed')
                     % If not a hinge, set angular velocity of b2 to angular
                     % velocity of b1
