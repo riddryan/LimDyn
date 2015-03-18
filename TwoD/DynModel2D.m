@@ -185,15 +185,15 @@ classdef DynModel2D
             num = this.springs.numsprings+1;
             
             if ~isempty(springname)
-                this.springs.name = springname;
+                this.springs.name{num} = springname;
             else
-                this.springs.name = sym(sprintf('k%d',num));
+                this.springs.name{num} = sym(sprintf('k%d',num));
             end
             
             if ~isempty(restlength)
-                this.springs.restlength = restlength;
+                this.springs.restlength{num} = restlength;
             else
-                this.springs.restlength = sym(sprintf('springlength%d',num));
+                this.springs.restlength{num} = sym(sprintf('springlength%d',num));
             end
             this.springs.numsprings = num;
             this.springs.body1{num} = body1name;
@@ -223,9 +223,9 @@ classdef DynModel2D
             num = this.dampers.numdampers+1;
             
             if ~isempty(dampername)
-                this.dampers.name = dampername;
+                this.dampers.name{num} = dampername;
             else
-                this.dampers.name = sym(sprintf('c%d',num));
+                this.dampers.name{num} = sym(sprintf('c%d',num));
             end
             
             this.dampers.numdampers = num;
@@ -381,10 +381,12 @@ classdef DynModel2D
             numdampers = this.dampers.numdampers;
             dof = this.dof;
             %% Springs
+            this.ExForces = sym(zeros(dof,1));
             for i = 1:numsprings
                 
-                b1name = j.relativebody{i};
-                b2name = j.constrainedbody{i};
+                b1name = this.springs.body1{i};
+                b2name = this.springs.body2{i};
+                type = this.springs.type{i};
                 
                 %Assign state variables to bodies
                 [b1,bnum1] = this.getBodyFromName(b1name);
@@ -401,9 +403,9 @@ classdef DynModel2D
                 [b2,bnum2] = this.getBodyFromName(b2name);
                 if ~strcmp(b2name,'ground')
                     [x2,y2,ang2,vx2,vy2,vang2] = getSymBodyStates(this,b2name);
-                    dex1x = 3*bnum2 - 2;
-                    dex1y = 3*bnum2 - 1;
-                    dex1ang = 3*bnum2;
+                    dex2x = 3*bnum2 - 2;
+                    dex2y = 3*bnum2 - 1;
+                    dex2ang = 3*bnum2;
                 else
                     x2=[];y2=[];ang2=[];vx2=[];vy2=[];vang2=[];
                     dex2x = []; dex2y = []; dex2ang = [];
@@ -416,7 +418,7 @@ classdef DynModel2D
                     newspringforces([dex2x dex2y]) =  this.springs.name{i}*[(x1 - x2 - this.springs.restlength{i}*cos(angle)) (y1 - y2 - this.springs.restlength{i}*sin(angle))];
                 else %angular
                     newspringforces(dex1ang) = -this.springs.name{i}*(ang1 - ang2 - this.springs.restlength{i});
-                    newspringforces(dex2ang) = this.springs.name{i}*(ang2 - ang2 - this.springs.restlength{i});
+                    newspringforces(dex2ang) = this.springs.name{i}*(ang1 - ang2 - this.springs.restlength{i});
                 end
                 this.ExForces = this.ExForces + newspringforces;
             end
@@ -424,7 +426,7 @@ classdef DynModel2D
             for i = 1:numdampers
                 b1name = this.dampers.body1{i};
                 b2name = this.dampers.body2{i};
-                
+                type = this.dampers.type{i};
                 %Assign state variables to bodies
                 [b1,bnum1] = this.getBodyFromName(b1name);
                 if ~strcmp(b1name,'ground')
@@ -440,9 +442,9 @@ classdef DynModel2D
                 [b2,bnum2] = this.getBodyFromName(b2name);
                 if ~strcmp(b2name,'ground')
                     [x2,y2,ang2,vx2,vy2,vang2] = getSymBodyStates(this,b2name);
-                    dex1x = 3*bnum2 - 2;
-                    dex1y = 3*bnum2 - 1;
-                    dex1ang = 3*bnum2;
+                    dex2x = 3*bnum2 - 2;
+                    dex2y = 3*bnum2 - 1;
+                    dex2ang = 3*bnum2;
                 else
                     x2=[];y2=[];ang2=[];vx2=[];vy2=[];vang2=[];
                     dex2x = []; dex2y = []; dex2ang = [];
