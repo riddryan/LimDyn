@@ -9,11 +9,16 @@ classdef DynModel2D
         springs = struct('body1',cell(1),'body2',cell(1),'type',cell(1),'name',cell(1),'restlength',cell(1),'numsprings',0);
         dampers = struct('body1',cell(1),'body2',cell(1),'type',cell(1),'name',cell(1),'numdampers',0);
         groundslopeangle = sym(0);
+        status = 0;
         M = sym([]); %Maximal Mass Matrix
         C = sym([]); %Constraint Matrix
         Cdot = sym([]); %Derivative of constraint matrix
         G = sym([]); %Forces due to gravity
+        SpringForces = sym([]); %Forces from Springs
+        DamperForces = sym([]); %Forces from Dampers
         ExForces = sym([]); %External Forces (springs, dampers, etc.)
+        RHS = sym([]);
+        MM = sym([]);
     end
     
     properties (Dependent = true)
@@ -28,47 +33,12 @@ classdef DynModel2D
     
     methods
         
-        %% Access Methods
-        function numbodies = get.numbodies(this)
-            numbodies = length(this.bodies);
-        end
-        
-        function dof = get.dof(this)
-            dof = 3*this.numbodies;
-        end
-        
-        function posdexes = get.posdexes(this)
-            posdexes = 1:(this.dof/2);
-        end
-        
-        function veldexes = get.veldexes(this)
-            veldexes = (this.dof/2+1):this.dof;
-        end
-        
-        function this = set.bodies(this,newbodies)
-            
-            if ~isa(this.bodies,'body2d')
-                error('this.bodies must be of class "body2d"')
-            end
-            
-            for i = 1:length(newbodies)
-                names{i} = newbodies(i).bodyname;
-            end
-            uniquenames = unique(names);
-            
-            if length(uniquenames)<length(newbodies)
-                error('You must assign a new name to each body in the model')
-            else
-                this.bodies = newbodies;
-            end
-        end
-        
-        function gravity = get.gravity(this)
-            gravity = sym([0;-1]);
-            alpha = this.groundslopeangle;
-            Rotation = [cos(alpha) sin(alpha); -sin(alpha) cos(alpha)];
-            gravity = Rotation*gravity;
-        end
+       %%
+       function [this] = Build(this)
+           this.MM;
+           this.RHS;
+           this.status = 0;
+       end
         
         %% User-Input Model Specification
         
@@ -125,6 +95,7 @@ classdef DynModel2D
                 this.bodies = Body;
             end
             
+            this.status = this.status+1;
         end
         
         function [this] = addJoint(this,constrainedbodyname,relativebodyname,joint,varargin)
@@ -158,6 +129,7 @@ classdef DynModel2D
             this.joints.joint{num} = joint;
             this.joints.angleoffset(num) = angleoffset;
             
+            this.status=this.status+1;
         end
         
         function [this] = addSpring(this,body1name,body2name,varargin)
@@ -199,6 +171,7 @@ classdef DynModel2D
             this.springs.body1{num} = body1name;
             this.springs.body2{num} = body2name;
             this.springs.type{num} = type;
+            this.status=this.status+1;
         end
         
         function [this] = addDamper(this,body1name,body2name,varargin)
@@ -232,32 +205,59 @@ classdef DynModel2D
             this.dampers.body1{num} = body1name;
             this.dampers.body2{num} = body2name;
             this.dampers.type{num} = type;
+            this.status=this.status+1;
         end
-        %% Symbolic Kinematics Calculations
         
-        function [poscom] = PosCOM(this,body,varargin)
-            RelTo = 'ground';
+         %% Basic Access Methods
+        function numbodies = get.numbodies(this)
+            numbodies = length(this.bodies);
+        end
+        
+        function dof = get.dof(this)
+            dof = 3*this.numbodies;
+        end
+        
+        function posdexes = get.posdexes(this)
+            posdexes = 1:(this.dof/2);
+        end
+        
+        function veldexes = get.veldexes(this)
+            veldexes = (this.dof/2+1):this.dof;
+        end
+        
+        function this = set.bodies(this,newbodies)
             
-            for i = 1 : 2 : length(varargin)
-                option = varargin{i};
-                val = varargin{i + 1};
-                switch option
-                    case 'RelTo'
-                        RelTo = val;
-                end
+            if ~isa(this.bodies,'body2d')
+                error('this.bodies must be of class "body2d"')
             end
             
-            poscom=[];
+            for i = 1:length(newbodies)
+                names{i} = newbodies(i).bodyname;
+            end
+            uniquenames = unique(names);
             
-            
-            
+            if length(uniquenames)<length(newbodies)
+                error('You must assign a new name to each body in the model')
+            else
+                this.bodies = newbodies;
+            end
         end
-        %% Symbolic Dynamics Calculations
         
-        function [this] = getConstraintMatrix(this)
+        function gravity = get.gravity(this)
+            gravity = sym([0;-1]);
+            alpha = this.groundslopeangle;
+            Rotation = [cos(alpha) sin(alpha); -sin(alpha) cos(alpha)];
+            gravity = Rotation*gravity;
+        end
+        
+        %% Dynamics Calculations
+        function C = get.C(this)
             %Creates a constraint matrix by interpreting the field
             %this.constraints
-            
+            if ~this.status
+                C = this.C;
+               return; 
+            end
             
             j = this.joints;
             numjoints = j.numjoints;
@@ -311,15 +311,17 @@ classdef DynModel2D
                 end
                 newconstraints = equationsToMatrix(newconstraints,vels);
                 %append constraints
-                this.C(numconstraints - size(newconstraints,1) + 1 : numconstraints,:) = newconstraints;
+                C(numconstraints - size(newconstraints,1) + 1 : numconstraints,:) = newconstraints;
                 
             end
             
         end
         
-        function [this] = getConstraintMatrixDot(this)
-            if isempty(this.C)
-                this = this.getConstraintMatrix;
+        function Cdot = get.Cdot(this)
+            
+            if ~this.status
+                Cdot = this.Cdot;
+                return;
             end
             C = this.C;
             
@@ -341,13 +343,14 @@ classdef DynModel2D
                     end
                 end
             end
-            
-            this.Cdot = Cdot;
-            
-            
+     
         end
         
-        function [this] = getGravityForces(this)
+        function G = get.G(this)
+            if ~this.status
+               G = this.G;
+               return;
+            end
             numbodies = this.numbodies;
             G = sym(zeros(numbodies*3,1));
             
@@ -357,11 +360,14 @@ classdef DynModel2D
                 G(3*(i-1)+2,1) = graveffect(2);
                 G(3*(i-1)+3,1) = 0;
             end
-            
-            this.G = G;
+
         end
         
-        function [this] = getMassMatrix(this)
+        function M = get.M(this)
+            if ~this.status
+               M = this.M;
+               return;
+            end
             
             numbodies = this.numbodies;
             
@@ -373,20 +379,22 @@ classdef DynModel2D
                 M(3*(i-1)+3,3*(i-1)+3) = this.bodies(i).inertia;
             end
             
-            this.M = M;
         end
         
-        function [this] = getExForces(this)
+        function SpringForces = get.SpringForces(this)
+            if ~this.status
+                SpringForces = this.SpringForces;
+                return;
+            end
             numsprings = this.springs.numsprings;
-            numdampers = this.dampers.numdampers;
             dof = this.dof;
-            %% Springs
-            this.ExForces = sym(zeros(dof,1));
+            SpringForces = sym(zeros(dof,1));
             for i = 1:numsprings
                 
                 b1name = this.springs.body1{i};
                 b2name = this.springs.body2{i};
                 type = this.springs.type{i};
+                
                 
                 %Assign state variables to bodies
                 [b1,bnum1] = this.getBodyFromName(b1name);
@@ -420,8 +428,18 @@ classdef DynModel2D
                     newspringforces(dex1ang) = -this.springs.name{i}*(ang1 - ang2 - this.springs.restlength{i});
                     newspringforces(dex2ang) = this.springs.name{i}*(ang1 - ang2 - this.springs.restlength{i});
                 end
-                this.ExForces = this.ExForces + newspringforces;
+                SpringForces = SpringForces + newspringforces;
             end
+        end
+        
+        function [DamperForces] = get.DamperForces(this)
+            if ~this.status
+                DamperForces = this.DamperForces;
+                return;
+            end
+            numdampers = this.dampers.numdampers;
+            dof = this.dof;
+            DamperForces = sym(zeros(dof,1));
             %% Dampers
             for i = 1:numdampers
                 b1name = this.dampers.body1{i};
@@ -458,9 +476,53 @@ classdef DynModel2D
                         newdamperforces(dex1ang) = -this.dampers.name{i}*(vang1 - vang2);
                         newdamperforces(dex2ang) = this.dampers.name{i}*(vang1 - vang2);
                 end
-                this.ExForces = this.ExForces + newdamperforces;
+                DamperForces = DamperForces + newdamperforces;
             end
         end
+        
+        function ExForces = get.ExForces(this)
+            if ~this.status
+                ExForces = this.ExForces;
+                return;
+            end
+            ExForces = this.SpringForces + this.DamperForces;
+        end
+        
+        function RHS = get.RHS(this)
+            if ~this.status
+                RHS = this.RHS;
+                return;
+            end
+            RHS = [this.G + this.ExForces; -this.Cdot*this.SymVels];
+        end
+        
+        function MM = get.MM(this)
+            if ~this.status
+                MM = this.MM;
+                return;
+            end
+            MM = [this.M this.C.'; this.C zeros(size(this.C,1))];
+        end
+        %% Symbolic Kinematics Calculations
+        
+        function [poscom] = PosCOM(this,body,varargin)
+            RelTo = 'ground';
+            
+            for i = 1 : 2 : length(varargin)
+                option = varargin{i};
+                val = varargin{i + 1};
+                switch option
+                    case 'RelTo'
+                        RelTo = val;
+                end
+            end
+            
+            poscom=[];
+            
+            
+            
+        end
+        
         
         %% Simulation
         function [xddot,constraintforces] = XDoubleDot(this,time,state)
