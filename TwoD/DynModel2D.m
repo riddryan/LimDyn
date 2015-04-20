@@ -8,8 +8,9 @@ classdef DynModel2D
             'joint',cell(1),'angleoffset',0,'numjoints',0); %joint info structure
         springs = struct('body1',cell(1),'body2',cell(1),'type',cell(1),'name',cell(1),'restlength',cell(1),'numsprings',0);
         dampers = struct('body1',cell(1),'body2',cell(1),'type',cell(1),'name',cell(1),'numdampers',0);
-        groundslopeangle = sym(0);
-        status = 0;
+        groundslopeangle = sym(0); %Angle of the ground
+        status = 0; % keeps track of whether new elements have been added to the model
+        mode = 'maximal'; %choose maximal or minimal
         M = sym([]); %Maximal Mass Matrix
         C = sym([]); %Constraint Matrix
         Cdot = sym([]); %Derivative of constraint matrix
@@ -17,17 +18,18 @@ classdef DynModel2D
         SpringForces = sym([]); %Forces from Springs
         DamperForces = sym([]); %Forces from Dampers
         ExForces = sym([]); %External Forces (springs, dampers, etc.)
-        RHS = sym([]);
-        MM = sym([]);
+        RHS = sym([]); % Big right hand side, accounting for all Forces and Constraints
+        MM = sym([]); %Big Mass Matrix, accounting for all masses and constraints
     end
     
     properties (Dependent = true)
         numbodies %number of rigid bodies
-        gravity
-        dof
-        posdexes
-        veldexes
+        gravity %gravity vector
+        dof %degrees of freedom in the system
+        posdexes %Indexes of position states
+        veldexes %Indexes of velocity states
     end
+    
     
     
     
@@ -35,8 +37,15 @@ classdef DynModel2D
         
        %%
        function [this] = Build(this)
-           this.MM;
-           this.RHS;
+           this.M = this.buildM;
+           this.C = this.buildC;
+           this.Cdot = this.buildCdot;
+           this.G = this.buildG;
+           this.SpringForces = this.buildSpringForces;
+           this.DamperForces = this.buildDamperForces;
+           this.ExForces = this.buildExForces;
+           this.MM = this.buildMM;
+           this.RHS = this.buildRHS;
            this.status = 0;
        end
         
@@ -66,6 +75,8 @@ classdef DynModel2D
             Body = body2d;
             BodyPropNames = fieldnames(Body.bodyprops);
             oldnumberofbodies = this.numbodies;
+            
+           
             
             %Assign dynamic properties of the new body
             for i = 1:length(BodyPropNames)
@@ -231,6 +242,7 @@ classdef DynModel2D
                 error('this.bodies must be of class "body2d"')
             end
             
+            names = cell(1,length(newbodies));
             for i = 1:length(newbodies)
                 names{i} = newbodies(i).bodyname;
             end
@@ -251,7 +263,7 @@ classdef DynModel2D
         end
         
         %% Dynamics Calculations
-        function C = get.C(this)
+        function C = buildC(this)
             %Creates a constraint matrix by interpreting the field
             %this.constraints
             if ~this.status
@@ -274,10 +286,10 @@ classdef DynModel2D
                 b2name = j.constrainedbody{k};
                 
                 %Assign state variables to bodies
-                [b1,bnum1] = this.getBodyFromName(b1name);
-                [x1,y1,ang1,vx1,vy1,vang1] = getSymBodyStates(this,b1name);
-                [b2,bnum2] = this.getBodyFromName(b2name);
-                [x2,y2,ang2,vx2,vy2,vang2] = getSymBodyStates(this,b2name);
+                [b1] = this.getBodyFromName(b1name);
+                [~,~,ang1,vx1,vy1,vang1] = getSymBodyStates(this,b1name);
+                [b2] = this.getBodyFromName(b2name);
+                [~,~,ang2,vx2,vy2,vang2] = getSymBodyStates(this,b2name);
                 
                 %Determine number of constraints imposed by joint k
                 joint = j.joint{k};
@@ -317,7 +329,7 @@ classdef DynModel2D
             
         end
         
-        function Cdot = get.Cdot(this)
+        function Cdot = buildCdot(this)
             
             if ~this.status
                 Cdot = this.Cdot;
@@ -346,7 +358,7 @@ classdef DynModel2D
      
         end
         
-        function G = get.G(this)
+        function G = buildG(this)
             if ~this.status
                G = this.G;
                return;
@@ -363,7 +375,7 @@ classdef DynModel2D
 
         end
         
-        function M = get.M(this)
+        function M = buildM(this)
             if ~this.status
                M = this.M;
                return;
@@ -381,7 +393,7 @@ classdef DynModel2D
             
         end
         
-        function SpringForces = get.SpringForces(this)
+        function SpringForces = buildSpringForces(this)
             if ~this.status
                 SpringForces = this.SpringForces;
                 return;
@@ -432,7 +444,7 @@ classdef DynModel2D
             end
         end
         
-        function [DamperForces] = get.DamperForces(this)
+        function [DamperForces] = buildDamperForces(this)
             if ~this.status
                 DamperForces = this.DamperForces;
                 return;
@@ -480,7 +492,7 @@ classdef DynModel2D
             end
         end
         
-        function ExForces = get.ExForces(this)
+        function ExForces = buildExForces(this)
             if ~this.status
                 ExForces = this.ExForces;
                 return;
@@ -488,7 +500,7 @@ classdef DynModel2D
             ExForces = this.SpringForces + this.DamperForces;
         end
         
-        function RHS = get.RHS(this)
+        function RHS = buildRHS(this)
             if ~this.status
                 RHS = this.RHS;
                 return;
@@ -496,7 +508,7 @@ classdef DynModel2D
             RHS = [this.G + this.ExForces; -this.Cdot*this.SymVels];
         end
         
-        function MM = get.MM(this)
+        function MM = buildMM(this)
             if ~this.status
                 MM = this.MM;
                 return;
