@@ -10,7 +10,6 @@ classdef DynModel2D
         dampers = struct('body1',cell(1),'body2',cell(1),'type',cell(1),'name',cell(1),'numdampers',0);
         groundslopeangle = sym(0); %Angle of the ground
         status = 0; % keeps track of whether new elements have been added to the model
-        mode = 'maximal'; %choose maximal or minimal
         M = sym([]); %Maximal Mass Matrix
         C = sym([]); %Constraint Matrix
         Cdot = sym([]); %Derivative of constraint matrix
@@ -28,6 +27,11 @@ classdef DynModel2D
         dof %degrees of freedom in the system
         posdexes %Indexes of position states
         veldexes %Indexes of velocity states
+        bodydofs;
+        mindofs;
+        bodydofdexes;
+        qs;
+        us;
     end
     
     
@@ -55,6 +59,7 @@ classdef DynModel2D
             %Creates a new bodye.  You can set
             %its properties bodyname, mass, inertia, length (d), and lcom.
             mass = sym([]); inertia = sym([]); d = sym([]); lcom = sym([]); bodyname = char([]);
+            
             for i = 1 : 2 : length(varargin)
                 option = varargin{i};
                 val = varargin{i + 1};
@@ -75,7 +80,6 @@ classdef DynModel2D
             Body = body2d;
             BodyPropNames = fieldnames(Body.bodyprops);
             oldnumberofbodies = this.numbodies;
-            
            
             
             %Assign dynamic properties of the new body
@@ -109,37 +113,48 @@ classdef DynModel2D
             this.status = this.status+1;
         end
         
-        function [this] = addJoint(this,constrainedbodyname,relativebodyname,joint,varargin)
+        function [this] = addDOF(this,constrainedbodyname,relativebodyname,joint,varargin)
             %Stores the information of a new joint "joint" relative to the body2d
             %"relativebody" in this.joints
             
-            %angleoffset only pertains to joints "fixed" and "slider".  The
-            %value of angle offset determines the CCW rotational offset of
-            %constrainedbody relative to relativebody.
+            %constrainedbodyname and relativebodyname are strings
+            %corresponding to the constrained body and the body to which it
+            %is constrained respectively
             
-            angleoffset = 0; %only for fixed and slider joints
+            %Possible arguments for JOINT
+            % 'hinge' produces a hinge joint about the ground z-axis,
+            % between the end of relativebody and constrainedbody
+            % 'slider' produces a slider along an axis corresponding to the
+            % angle of the relativebody
+            %'fixed' constrains the constrainedbody to have no movement relative to
+            %relativebody
             
+            %axis only pertains to joints "fixed" and "slider".
+            axis = [1 0 0]; %Axis for fixed and slider joints
             for i = 1 : 2 : length(varargin)
                 option = varargin{i};
                 val = varargin{i + 1};
                 switch option
-                    case 'angleoffset'
-                        angleoffset = val;
+                    case 'axis'
+                        axis = val;
                 end
             end
             
             if strcmp(joint,'Hinge')
-                angleoffset = 0;
+                axis = [0 0 1]; %2D, so rotation must be about z-axis
             end
             
-            num = this.joints.numjoints+1;
-            
+            num = this.joints.numjoints + 1;
             this.joints.numjoints = num;
             this.joints.constrainedbody{num} = constrainedbodyname;
             this.joints.relativebody{num} = relativebodyname;
             this.joints.joint{num} = joint;
-            this.joints.angleoffset(num) = angleoffset;
-            
+            this.joints.axis{num} = axis;
+            [~,bodynum] = this.getBodyFromName(constrainedbodyname);
+            this.bodies(bodynum).dof = this.bodies(bodynum).dof + 1;
+            dofnum = length(this.qs);
+            this.bodies(bodynum).qs(end+1) = sym(sprintf('q%d',dofnum));
+            this.bodies(bodynum).us(end+1) = sym(sprintf('u%d',dofnum));
             this.status=this.status+1;
         end
         
@@ -260,6 +275,22 @@ classdef DynModel2D
             alpha = this.groundslopeangle;
             Rotation = [cos(alpha) sin(alpha); -sin(alpha) cos(alpha)];
             gravity = Rotation*gravity;
+        end
+        
+        function bodydofs = get.bodydofs(this)
+            numbodies = this.numbodies;
+            bodydofs = zeros(numbodies,1);
+            for i = 1:numbodies
+                bodydofs(i) = this.bodies(i).dof;
+            end
+        end
+        
+        function bodydofdexes = get.bodydofdexes(this)
+            bodydofdexes = cumsum(this.bodydofs);
+        end
+        
+        function mindofs = get.mindofs(this)
+           mindofs = sum(this.bodydofs); 
         end
         
         %% Dynamics Calculations
@@ -515,23 +546,46 @@ classdef DynModel2D
             end
             MM = [this.M this.C.'; this.C zeros(size(this.C,1))];
         end
-        %% Symbolic Kinematics Calculations
         
-        function [poscom] = PosCOM(this,body,varargin)
-            RelTo = 'ground';
+        function J = buildJ(this)
+%             if ~this.status
+%                 J = this.J;
+%                 return;
+%             end
             
-            for i = 1 : 2 : length(varargin)
-                option = varargin{i};
-                val = varargin{i + 1};
-                switch option
-                    case 'RelTo'
-                        RelTo = val;
-                end
-            end
-            
-            poscom=[];
-            
-            
+%            bodiesconstrainedtoground = this.joints.constrainedbody{strcmp(this.joints.relativebody,'ground')};
+%            if isa(bodiesconstrainedtoground,'cell')
+%                rootbody = bodiesconstrainedtoground{1};
+%            else
+%               rootbody = bodiesconstrainedtoground; 
+%            end
+%            
+           J = sym(zeros(this.dof,this.mindofs));
+           for i = 1:this.numbodies
+               
+           end
+           
+        end
+        
+        function BodyPositions = buildBodyPositions(this)
+           this.assignMinStates;
+           BodyPositions = sym(zeros(this.dof,1));
+           
+           prevbody = sym(zeros(3,1));
+           prevangle = sym(0);
+           for i = 1:this.numbodies
+               jointtype = this.joints.joint{i};
+               [qs,~] = this.getMinSymBodyStates(this.bodies(i).bodyname);
+               if strcmp(jointtype,'Hinge')
+                  BodyPositions(3*(i-1)+[1 2],1) = r.bodies(i).lcom*[cos(qs);sin(qs)]+prevbody(1:2);
+                  BodyPositions(3*(i-1)+3,1) = qs + prevbody(3);
+                  prevangle = qs;
+               elseif strcmp(jointtype,'Slider')
+                   axisangle = prevangle+this.joints.angleoffset{i};
+                   BodyPositions(3*(i-1)+[1 2],1) = qs*[cos(axisangle);sin(axisangle)] + prevbody(1:2);
+                   BodyPositions(3*(i-1)+3,1) = qs + prevbody(3);
+               end
+           end          
             
         end
         
@@ -583,6 +637,26 @@ classdef DynModel2D
             vx = sym(sprintf('vx%d',bodynum));
             vy = sym(sprintf('vy%d',bodynum));
             vang = sym(sprintf('vang%d',bodynum));
+        end
+        
+        function [qs,us] = getMinSymBodyStates(this,bodyname)
+            [~,bodynum] = this.getBodyFromName(bodyname);
+            num = this.bodydofs(bodynum);
+            sdex = this.bodydofdexes(bodynum)-num+1;
+            for i = 1:num
+            qs(i,1) = sym(sprintf('q%d',sdex+i-1));
+            us(i,1) = sym(sprintf('u%d',sdex+i-1)); 
+            end
+            
+        end
+        
+        function [] = assignMinStates(this)
+            ws = 'caller';
+            %Create symbols for state variables
+            for i = 1:this.mindofs
+                assignin(ws, sprintf('q%d',i), eval(sprintf('sym(''q%d'');',i)) );
+                assignin(ws, sprintf('u%d',i), eval(sprintf('sym(''u%d'');',i)) );
+            end
         end
         
         function [] = assignSymBodyStates(this)

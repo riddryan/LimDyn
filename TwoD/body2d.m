@@ -8,6 +8,12 @@ classdef body2d
         inertia = sym('0'); 
         d = sym('1'); %distance from start of body to end of body
         lcom = sym('.5'); %distance between start of body to COM of body
+        qs = sym([]);
+        us = sym([]);
+        xaxis = sym([]);
+        yaxis = sym([]);
+        zangle = sym([]);
+        dof = 2;
     end
     
     properties (Dependent = true)
