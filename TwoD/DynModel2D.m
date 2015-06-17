@@ -8,11 +8,12 @@ classdef DynModel2D
             'joint',cell(1),'angleoffset',0,'numjoints',0); %joint info structure
         springs = struct('body1',cell(1),'body2',cell(1),'type',cell(1),'name',cell(1),'restlength',cell(1),'numsprings',0);
         dampers = struct('body1',cell(1),'body2',cell(1),'type',cell(1),'name',cell(1),'numdampers',0);
+        phases = cell(1);
         groundslopeangle = sym(0); %Angle of the ground
         status = 0; % keeps track of whether new elements have been added to the model
         M = sym([]); %Maximal Mass Matrix
-        C = sym([]); %Constraint Matrix
-        Cdot = sym([]); %Derivative of constraint matrix
+        C = {sym([])}; %Constraint Matrix
+        Cdot = {sym([])}; %Derivative of constraint matrix
         G = sym([]); %Forces due to gravity
         SpringForces = sym([]); %Forces from Springs
         DamperForces = sym([]); %Forces from Dampers
@@ -131,12 +132,15 @@ classdef DynModel2D
             
             %axis only pertains to joints "fixed" and "slider".
             axis = [1 0 0]; %Axis for fixed and slider joints
+            angleoffset = 0;
             for i = 1 : 2 : length(varargin)
                 option = varargin{i};
                 val = varargin{i + 1};
                 switch option
                     case 'axis'
                         axis = val;
+                    case 'angleoffset'
+                        angleoffset = val;
                 end
             end
             
@@ -150,11 +154,11 @@ classdef DynModel2D
             this.joints.relativebody{num} = relativebodyname;
             this.joints.joint{num} = joint;
             this.joints.axis{num} = axis;
+            this.joints.angleoffset(num) = angleoffset;
             [~,bodynum] = this.getBodyFromName(constrainedbodyname);
             this.bodies(bodynum).dof = this.bodies(bodynum).dof + 1;
-            dofnum = length(this.qs);
-            this.bodies(bodynum).qs(end+1) = sym(sprintf('q%d',dofnum));
-            this.bodies(bodynum).us(end+1) = sym(sprintf('u%d',dofnum));
+            this.bodies(bodynum).qs(end+1) = sym(sprintf('q%d',num));
+            this.bodies(bodynum).us(end+1) = sym(sprintf('u%d',num));
             this.status=this.status+1;
         end
         
@@ -234,6 +238,16 @@ classdef DynModel2D
             this.status=this.status+1;
         end
         
+        function [this] = addPhase(this,name,constraints,varargin)
+            this.phases{end+1} = name;
+            if ~isempty(constraints)
+                this.C{end+1} = equationsToMatrix(constraints,r.us);
+            else
+                this.C{end+1} = [];
+            end
+            this.status = this.status+1;
+        end
+        
          %% Basic Access Methods
         function numbodies = get.numbodies(this)
             numbodies = length(this.bodies);
@@ -249,6 +263,13 @@ classdef DynModel2D
         
         function veldexes = get.veldexes(this)
             veldexes = (this.dof/2+1):this.dof;
+        end
+        
+        function qs = get.qs(this)
+           qs =  sym('q',[this.joints.numjoints 1]);
+        end
+        function us = get.us(this)
+            us =  sym('u',[this.joints.numjoints 1]);
         end
         
         function this = set.bodies(this,newbodies)
@@ -294,71 +315,6 @@ classdef DynModel2D
         end
         
         %% Dynamics Calculations
-        function C = buildC(this)
-            %Creates a constraint matrix by interpreting the field
-            %this.constraints
-            if ~this.status
-                C = this.C;
-               return; 
-            end
-            
-            j = this.joints;
-            numjoints = j.numjoints;
-            dof = this.dof;
-            
-            %Create symbols for state variables
-            this.assignSymBodyStates;
-            vels = this.SymVels;
-            
-            numconstraints = 0;
-            for k = 1:numjoints
-                
-                b1name = j.relativebody{k};
-                b2name = j.constrainedbody{k};
-                
-                %Assign state variables to bodies
-                [b1] = this.getBodyFromName(b1name);
-                [~,~,ang1,vx1,vy1,vang1] = getSymBodyStates(this,b1name);
-                [b2] = this.getBodyFromName(b2name);
-                [~,~,ang2,vx2,vy2,vang2] = getSymBodyStates(this,b2name);
-                
-                %Determine number of constraints imposed by joint k
-                joint = j.joint{k};
-                angleoffset = j.angleoffset(k);
-                if strcmp(joint,'hinge') || strcmp(joint,'slider')
-                    numconstraints = numconstraints + 2;
-                elseif strcmp(joint,'fixed')
-                    numconstraints = numconstraints + 3;
-                end
-                
-                newconstraints = sym(zeros(numconstraints,1));
-                if strcmp(joint,'slider') || strcmp(joint,'fixed')
-                    % If not a hinge, set angular velocity of b2 to angular
-                    % velocity of b1
-                    newconstraints(1) = vang1 - vang2 == 0;
-                    %Angle of constrainedbody
-                    alpha = ang1 + angleoffset;
-                    %Do not allow velocity perpendicular to the direction of
-                    %the body
-                    newconstraints(2) = vx1*-sin(alpha) + vx2*cos(alpha) == 0;
-                end
-                
-                %Do not allow velocity along the direction of the body
-                if strcmp(joint,'fixed')
-                    newconstraints(2) = vx1*cos(alpha) + vx2*sin(alpha) == 0;
-                end
-                
-                if strcmp(joint,'hinge')
-                    newconstraints(1) = vx1 - (b1.d - b1.lcom)*sin(ang1)*vang1 - vx2 - b2.lcom*sin(ang2)*vang2 == 0;
-                    newconstraints(2) = vy1 + (b1.d - b1.lcom)*cos(ang1)*vang1 - vy2 + b2.lcom*cos(ang2)*vang2 == 0;
-                end
-                newconstraints = equationsToMatrix(newconstraints,vels);
-                %append constraints
-                C(numconstraints - size(newconstraints,1) + 1 : numconstraints,:) = newconstraints;
-                
-            end
-            
-        end
         
         function Cdot = buildCdot(this)
             

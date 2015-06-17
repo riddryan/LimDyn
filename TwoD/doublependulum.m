@@ -6,8 +6,8 @@ r = r.addBody('bodyname','shank');
 
 r = r.addBody('bodyname','thigh');
 
-r = r.addJoint('shank','ground','hinge');
-r = r.addJoint('thigh','shank','hinge');
+r = r.addDOF('shank','ground','hinge');
+r = r.addDOF('thigh','shank','hinge');
 
 r = r.addSpring('shank','thigh','type','angular');
 r = r.addDamper('shank','thigh','type','angular');
