@@ -330,7 +330,7 @@ classdef DynModel2D
             
             C = this.C;
             
-            for c = 1:length(C)
+            for c = 1:length(C) %Each cell element of C corresponds to a phase
                 [nconstraints,nstates] = size(C{c});
                 Cdot{c} = sym(zeros(size(C{c})));
                 for i = 1:nconstraints %each row/constraint
