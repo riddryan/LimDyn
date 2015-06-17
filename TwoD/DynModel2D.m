@@ -254,7 +254,7 @@ classdef DynModel2D
         end
         
         function dof = get.dof(this)
-            dof = 3*this.numbodies;
+            dof = this.joints.numjoints;
         end
         
         function posdexes = get.posdexes(this)
@@ -322,23 +322,24 @@ classdef DynModel2D
                 Cdot = this.Cdot;
                 return;
             end
+            
+            if isempty(this.C)
+               Cdot = [];
+               return;
+            end
+            
             C = this.C;
             
-            [nconstraints,nstates] = size(C);
-            numbodies = this.numbodies;
-            
-            Cdot = sym(zeros(size(C)));
-            this.assignSymBodyStates;
-            types = [{'x'} {'y'} {'ang'}];
-            
-            for i = 1:nconstraints %each row-element of Cdot
-                for j = 1:nstates %each column-element of Cdot
-                    for k = 1:numbodies %each body in the model
-                        for t = 1:length(types) %each state of the body (x,y,ang)
-                            %Take the partial derivative of C(i,j) w.r.t.
-                            %to state types(t) of body k
-                            Cdot(i,j) = eval(sprintf('Cdot(i,j) + diff(C(i,j),%s%d)*v%s%d',types{t},k,types{t},k));
-                        end
+            for c = 1:length(C)
+                [nconstraints,nstates] = size(C{c});
+                Cdot{c} = sym(zeros(size(C{c})));
+                for i = 1:nconstraints %each row/constraint
+                    for j = 1:nstates %each column/DOF
+                            for k = 1:length(this.qs) %each state
+                                %Take the partial derivative of C(i,j) w.r.t.
+                                %to each dof
+                                Cdot(i,j) = eval(sprintf('Cdot{c}(i,j) + diff(C{c}(i,j),q%d)*u%d',k,k));
+                            end
                     end
                 end
             end
