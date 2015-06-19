@@ -111,7 +111,7 @@ classdef DynModel2D
                 
                 %If user input no value, give it a default value based on
                 %the number of the body that is
-                if isempty(this.bodies.(this.numbodies).(BodyPropNames{i}))
+                if isempty(this.bodies(this.numbodies).(BodyPropNames{i}))
                     this.bodies(this.numbodies).(BodyPropNames{i}) = eval( sprintf('sym('' %s%d '')', BodyPropNames{i}, this.numbodies) );
                 end
                 
@@ -119,7 +119,7 @@ classdef DynModel2D
             
             %Only one way to have a hinge joint in 2D; don't actually need
             %the axis field for it but will put it in for the heck of it
-            if strcmp(joint,'Hinge')
+            if strcmp(joint,'hinge')
                axis = [0 0 1]; 
             end
             
