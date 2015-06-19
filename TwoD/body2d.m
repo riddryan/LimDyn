@@ -6,7 +6,7 @@ classdef body2d
         bodyname = 'Body0';
         mass = sym('1'); 
         inertia = sym('0'); 
-        d = sym([0 0]); %distance from relative body's center of mass to the joint
+        d = sym([0;0]); %distance from relative body's center of mass to the joint
         lcom = sym('1'); %distance between start of body to COM of body
         q = sym([]);
         u = sym([]);

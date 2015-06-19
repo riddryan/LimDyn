@@ -6,7 +6,8 @@ classdef DynModel2D
         bodies = body2d.empty;
 %         joints = struct('constrainedbody',cell(1),'relativebody',cell(1),...
 %             'joint',cell(1),'angleoffset',0,'numjoints',0); %joint info structure
-        springs = struct('body1',cell(1),'body2',cell(1),'type',cell(1),'name',cell(1),'restlength',cell(1),'numsprings',0);
+        springs = struct('body1',cell(1),'body2',cell(1),'type',cell(1),'name',cell(1),...
+                         'restlength',cell(1),'attachvec1',sym([0;0]),'attachvec2',sym([0;0]),'numsprings',0);
         dampers = struct('body1',cell(1),'body2',cell(1),'type',cell(1),'name',cell(1),'numdampers',0);
         phases = cell(1);
         groundslopeangle = sym(0); %Angle of the ground
@@ -71,7 +72,7 @@ classdef DynModel2D
             %'fixed' constrains the body to have no movement relative to
             %relativebody
             
-            mass = sym([]); inertia = sym([]); d = sym([0 0]); lcom = sym([]);
+            mass = sym([]); inertia = sym([]); d = sym([0;0]); lcom = sym([]);
             axis = [1 0];
             
             for i = 1 : 2 : length(varargin)
@@ -145,8 +146,10 @@ classdef DynModel2D
         
         function [this] = addSpring(this,body1name,body2name,varargin)
             type = 'linear';
-            springname = [];
-            restlength = [];
+            springname = []; %Name of Spring
+            restlength = []; %Rest length of spring
+            attachvec1 = sym([0;0]); %Where the spring is attached to body1 relative to its COM
+            attachvec2 = sym([0;0]); %Where the spring is attached to body2 relative to its COM
             
             for i = 1 : 2 : length(varargin)
                 option = varargin{i};
@@ -158,6 +161,10 @@ classdef DynModel2D
                         springname = val;
                     case 'restlength'
                         restlength = val;
+                    case 'attachvec1'
+                        attachvec1 = val;
+                    case 'attachvec2'
+                        attachvec2 = val;
                 end
             end
             
