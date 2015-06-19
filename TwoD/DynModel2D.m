@@ -223,7 +223,12 @@ classdef DynModel2D
         end
         
         function dof = get.dof(this)
-            dof = this.joints.numjoints;
+            dof = 0;
+            for i = 1:this.numbodies
+                if any(strcmp(this.bodies(i).joint,{'hinge' 'slider'}))
+                    dof = dof + 1;
+                end
+            end
         end
         
         function posdexes = get.posdexes(this)
@@ -235,10 +240,10 @@ classdef DynModel2D
         end
         
         function qs = get.qs(this)
-           qs =  sym('q',[this.joints.numjoints 1]);
+           qs =  sym('q',[this.dof 1]);
         end
         function us = get.us(this)
-            us =  sym('u',[this.joints.numjoints 1]);
+            us =  sym('u',[this.dof 1]);
         end
         
         function this = set.bodies(this,newbodies)
