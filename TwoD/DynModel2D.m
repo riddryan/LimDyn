@@ -123,9 +123,22 @@ classdef DynModel2D
             %DOF/Joint information
             this.bodies(this.numbodies).relativebody = relativebody;
             this.bodies(this.numbodies).joint = joint;
-            this.bodies(this.numbodies).axis = axis;
+            this.bodies(this.numbodies).jointaxis = axis;
             this.bodies(this.numbodies).q = sym(sprintf('q%d',this.dof));
             this.bodies(this.numbodies).u = sym(sprintf('u%d',this.dof));
+            
+            if strcmp(joint,'hinge')
+                ang = this.bodies(this.numbodies).q;
+                this.bodies(this.numbodies).angle = ang;
+                this.bodies(this.numbodies).R = [cos(ang) sin(ang); -sin(ang) cos(ang)];
+                this.bodies(this.numbodies).xaxis = this.bodies(this.numbodies).R*[1;0];
+                this.bodies(this.numbodies).yaxis = this.bodies(this.numbodies).R*[0;1];
+            else
+                this.bodies(this.numbodies).angle = this.bodies(this.numbodies-1).angle;
+                this.bodies(this.numbodies).R = this.bodies(this.numbodies-1).R;
+                this.bodies(this.numbodies).xaxis = this.bodies(this.numbodies-1).xaxis;
+                this.bodies(this.numbodies).yaxis = this.bodies(this.numbodies-1).yaxis;
+            end
             
             this.status = this.status+1;
         end

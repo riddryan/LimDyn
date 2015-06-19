@@ -10,14 +10,15 @@ classdef body2d
         lcom = sym('1'); %distance between start of body to COM of body
         q = sym([]);
         u = sym([]);
+        R = sym([]); %Rotation Matrix
         xaxis = sym([]);
         yaxis = sym([]);
-        angle = sym([]);
+        angle = sym([]); %angle of x axis from ground
         
         %DOF info
-        relativebody = [];
-        joint = [];
-        axis = [ ];
+        relativebody = []; %Body to which joint is attached
+        joint = []; %type of joint
+        jointaxis = [ ]; %axis of joint
     end
     
     properties (Dependent = true)
