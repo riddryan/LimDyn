@@ -31,9 +31,6 @@ classdef DynModel2D
         dof %degrees of freedom in the system
         posdexes %Indexes of position states
         veldexes %Indexes of velocity states
-        bodydofs;
-        mindofs;
-        bodydofdexes;
         qs;
         us;
     end
@@ -127,6 +124,8 @@ classdef DynModel2D
             this.bodies(this.numbodies).relativebody = relativebody;
             this.bodies(this.numbodies).joint = joint;
             this.bodies(this.numbodies).axis = axis;
+            this.bodies(this.numbodies).q = sym(sprintf('q%d',this.dof));
+            this.bodies(this.numbodies).u = sym(sprintf('u%d',this.dof));
             
             this.status = this.status+1;
         end
@@ -259,7 +258,7 @@ classdef DynModel2D
             uniquenames = unique(names);
             
             if length(uniquenames)<length(newbodies)
-                error('You must assign a new name to each body in the model')
+                error('You must assign a unique name to each body in the model')
             else
                 this.bodies = newbodies;
             end
@@ -272,21 +271,6 @@ classdef DynModel2D
             gravity = Rotation*gravity;
         end
         
-        function bodydofs = get.bodydofs(this)
-            numbodies = this.numbodies;
-            bodydofs = zeros(numbodies,1);
-            for i = 1:numbodies
-                bodydofs(i) = this.bodies(i).dof;
-            end
-        end
-        
-        function bodydofdexes = get.bodydofdexes(this)
-            bodydofdexes = cumsum(this.bodydofs);
-        end
-        
-        function mindofs = get.mindofs(this)
-           mindofs = sum(this.bodydofs); 
-        end
         
         %% Dynamics Calculations
         
