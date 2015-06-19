@@ -4,13 +4,16 @@ classdef DynModel2D
     properties
         name = 'Model2D_1';
         bodies = body2d.empty;
-        joints = struct('constrainedbody',cell(1),'relativebody',cell(1),...
-            'joint',cell(1),'angleoffset',0,'numjoints',0); %joint info structure
+%         joints = struct('constrainedbody',cell(1),'relativebody',cell(1),...
+%             'joint',cell(1),'angleoffset',0,'numjoints',0); %joint info structure
         springs = struct('body1',cell(1),'body2',cell(1),'type',cell(1),'name',cell(1),'restlength',cell(1),'numsprings',0);
         dampers = struct('body1',cell(1),'body2',cell(1),'type',cell(1),'name',cell(1),'numdampers',0);
         phases = cell(1);
         groundslopeangle = sym(0); %Angle of the ground
         status = 0; % keeps track of whether new elements have been added to the model
+        
+        frames = struct; %Field for each DOF, subfields for each 2D unit vec in that frame
+        positions = struct; %Field for each body, 2D vector for each body
         M = sym([]); %Maximal Mass Matrix
         C = {sym([])}; %Constraint Matrix
         Cdot = {sym([])}; %Derivative of constraint matrix
@@ -56,7 +59,7 @@ classdef DynModel2D
         
         %% User-Input Model Specification
         
-        function [this] = addBody(this,varargin)
+        function [this] = addBody(this,relativebodyname,joint,axis,varargin)
             %Creates a new bodye.  You can set
             %its properties bodyname, mass, inertia, length (d), and lcom.
             mass = sym([]); inertia = sym([]); d = sym([]); lcom = sym([]); bodyname = char([]);
@@ -155,10 +158,6 @@ classdef DynModel2D
             this.joints.joint{num} = joint;
             this.joints.axis{num} = axis;
             this.joints.angleoffset(num) = angleoffset;
-            [~,bodynum] = this.getBodyFromName(constrainedbodyname);
-            this.bodies(bodynum).dof = this.bodies(bodynum).dof + 1;
-            this.bodies(bodynum).qs(end+1) = sym(sprintf('q%d',num));
-            this.bodies(bodynum).us(end+1) = sym(sprintf('u%d',num));
             this.status=this.status+1;
         end
         
@@ -315,6 +314,17 @@ classdef DynModel2D
         end
         
         %% Dynamics Calculations
+        
+        function positions = buildPositions(this)
+            if ~this.status
+                positions = this.positions;
+                return;
+            end
+            
+            for i = 1:this.numbodies
+                
+            end
+        end
         
         function Cdot = buildCdot(this)
             
