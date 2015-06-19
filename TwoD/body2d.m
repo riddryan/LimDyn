@@ -6,8 +6,8 @@ classdef body2d
         bodyname = 'Body0';
         mass = sym('1'); 
         inertia = sym('0'); 
-        d = sym('1'); %distance from start of body to end of body
-        lcom = sym('.5'); %distance between start of body to COM of body
+        d = sym([0 0]); %distance from relative body's center of mass to the joint
+        lcom = sym('1'); %distance between start of body to COM of body
         q = sym([]);
         u = sym([]);
         xaxis = sym([]);
@@ -30,7 +30,7 @@ classdef body2d
            ground = body2d;
            ground.bodyname = 'ground';
            ground.mass = sym('0');
-           ground.d = sym('0');
+           ground.d = sym([0 0]);
            ground.lcom = sym('0');
         end
         

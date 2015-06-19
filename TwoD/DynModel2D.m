@@ -71,7 +71,7 @@ classdef DynModel2D
             %'fixed' constrains the body to have no movement relative to
             %relativebody
             
-            mass = sym([]); inertia = sym([]); d = sym([]); lcom = sym([]);
+            mass = sym([]); inertia = sym([]); d = sym([0 0]); lcom = sym([]);
             axis = [1 0];
             
             for i = 1 : 2 : length(varargin)
@@ -109,7 +109,7 @@ classdef DynModel2D
                 %If user input no value, give it a default value based on
                 %the number of the body that is
                 if isempty(this.bodies(this.numbodies).(BodyPropNames{i}))
-                    this.bodies(this.numbodies).(BodyPropNames{i}) = eval( sprintf('sym('' %s%d '')', BodyPropNames{i}, this.numbodies) );
+                        this.bodies(this.numbodies).(BodyPropNames{i}) = eval( sprintf('sym('' %s%d '')', BodyPropNames{i}, this.numbodies) );
                 end
                 
             end
