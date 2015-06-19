@@ -59,10 +59,23 @@ classdef DynModel2D
         
         %% User-Input Model Specification
         
-        function [this] = addBody(this,relativebodyname,joint,axis,varargin)
+        function [this] = addBody(this,bodyname,relativebody,joint,varargin)
             %Creates a new bodye.  You can set
             %its properties bodyname, mass, inertia, length (d), and lcom.
-            mass = sym([]); inertia = sym([]); d = sym([]); lcom = sym([]); bodyname = char([]);
+            %
+            %relativebody is the body to which the joint is attached
+            %
+            % axis is a 2D unit vector that the slider joint moves along.
+            %
+            %Possible arguments for JOINT
+            % 'hinge' produces a hinge joint about the ground z-axis,
+            % between at the relativebody
+            % 'slider' produces a slider along the axis specified
+            %'fixed' constrains the body to have no movement relative to
+            %relativebody
+            
+            mass = sym([]); inertia = sym([]); d = sym([]); lcom = sym([]);
+            axis = [1 0];
             
             for i = 1 : 2 : length(varargin)
                 option = varargin{i};
@@ -76,89 +89,46 @@ classdef DynModel2D
                         d = val;
                     case 'lcom'
                         lcom = val;
-                    case 'bodyname'
-                        bodyname = val;
+                    case 'axis'
+                        axis = val;
                 end
             end
             
             Body = body2d;
             BodyPropNames = fieldnames(Body.bodyprops);
-            oldnumberofbodies = this.numbodies;
+            Body.bodyname = bodyname;
+            if this.numbodies~=0
+                this.bodies = [this.bodies Body];
+            else
+                this.bodies = Body;
+            end
            
             
             %Assign dynamic properties of the new body
             for i = 1:length(BodyPropNames)
                 %Assign the property to user input value
-                Body.(BodyPropNames{i}) =  eval(BodyPropNames{i});
+                this.bodies(this.numbodies).(BodyPropNames{i}) =  eval(BodyPropNames{i});
                 
                 %If user input no value, give it a default value based on
                 %the number of the body that is
-                if isempty(Body.(BodyPropNames{i}))
-                    Body.(BodyPropNames{i}) = eval( sprintf('sym('' %s%d '')', BodyPropNames{i}, oldnumberofbodies+1) );
+                if isempty(this.bodies.(this.numbodies).(BodyPropNames{i}))
+                    this.bodies(this.numbodies).(BodyPropNames{i}) = eval( sprintf('sym('' %s%d '')', BodyPropNames{i}, this.numbodies) );
                 end
                 
             end
             
-            
-            %If user input no value, give it name BodyX, where X is the
-            %number of the new body
-            if isempty(bodyname)
-                Body.bodyname = eval( sprintf('Body%d', oldnumberofbodies+1) );
-            else %Assign body name based on user input
-                Body.bodyname = bodyname;
+            %Only one way to have a hinge joint in 2D; don't actually need
+            %the axis field for it but will put it in for the heck of it
+            if strcmp(joint,'Hinge')
+               axis = [0 0 1]; 
             end
             
-            if oldnumberofbodies~=0
-                this.bodies = [this.bodies Body];
-            else
-                this.bodies = Body;
-            end
+            %DOF/Joint information
+            this.bodies(this.numbodies).relativebody = relativebody;
+            this.bodies(this.numbodies).joint = joint;
+            this.bodies(this.numbodies).axis = axis;
             
             this.status = this.status+1;
-        end
-        
-        function [this] = addDOF(this,constrainedbodyname,relativebodyname,joint,varargin)
-            %Stores the information of a new joint "joint" relative to the body2d
-            %"relativebody" in this.joints
-            
-            %constrainedbodyname and relativebodyname are strings
-            %corresponding to the constrained body and the body to which it
-            %is constrained respectively
-            
-            %Possible arguments for JOINT
-            % 'hinge' produces a hinge joint about the ground z-axis,
-            % between the end of relativebody and constrainedbody
-            % 'slider' produces a slider along an axis corresponding to the
-            % angle of the relativebody
-            %'fixed' constrains the constrainedbody to have no movement relative to
-            %relativebody
-            
-            %axis only pertains to joints "fixed" and "slider".
-            axis = [1 0 0]; %Axis for fixed and slider joints
-            angleoffset = 0;
-            for i = 1 : 2 : length(varargin)
-                option = varargin{i};
-                val = varargin{i + 1};
-                switch option
-                    case 'axis'
-                        axis = val;
-                    case 'angleoffset'
-                        angleoffset = val;
-                end
-            end
-            
-            if strcmp(joint,'Hinge')
-                axis = [0 0 1]; %2D, so rotation must be about z-axis
-            end
-            
-            num = this.joints.numjoints + 1;
-            this.joints.numjoints = num;
-            this.joints.constrainedbody{num} = constrainedbodyname;
-            this.joints.relativebody{num} = relativebodyname;
-            this.joints.joint{num} = joint;
-            this.joints.axis{num} = axis;
-            this.joints.angleoffset(num) = angleoffset;
-            this.status=this.status+1;
         end
         
         function [this] = addSpring(this,body1name,body2name,varargin)
