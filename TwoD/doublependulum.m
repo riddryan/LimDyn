@@ -1,13 +1,11 @@
 r = DynModel2D;
 r.name = 'double_pendulum';
 
-r = r.addBody('shank','ground','hinge');
+% Create Bodies & Joints
+[r,shank] = r.addBody('shank','ground','hinge'); 
+[r,thigh] = r.addBody('thigh','shank','hinge','d','lshanktothigh'*shank.xaxis);
 
-% 
-% r = r.addBody('bodyname','thigh');
-% 
-% r = r.addDOF('shank','ground','hinge');
-% r = r.addDOF('thigh','shank','hinge');
+
 % 
 % r = r.addSpring('shank','thigh','type','angular');
 % r = r.addDamper('shank','thigh','type','angular');

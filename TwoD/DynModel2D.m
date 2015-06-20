@@ -58,7 +58,7 @@ classdef DynModel2D
         
         %% User-Input Model Specification
         
-        function [this] = addBody(this,bodyname,relativebody,joint,varargin)
+        function [this,newbody] = addBody(this,bodyname,relativebody,joint,varargin)
             %Creates a new bodye.  You can set
             %its properties bodyname, mass, inertia, length (d), and lcom.
             %
@@ -150,6 +150,7 @@ classdef DynModel2D
             end
 %             this.bodies.op{)
             
+            newbody = this.bodies(this.numbodies);
             this.status = this.status+1;
         end
         
@@ -246,6 +247,15 @@ classdef DynModel2D
         end
         
          %% Basic Access Methods
+         
+         function body = body(this,name)
+            for i = 1:this.numbodies
+                if strcmp(this.bodies(i),name)
+                    body = this.bodies(i);
+                    return;
+                end
+            end
+         end
          
          function allsyms = get.allsyms(this)
              allsyms = {};
