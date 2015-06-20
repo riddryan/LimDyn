@@ -8,6 +8,8 @@ classdef body2d
         inertia = sym('0'); 
         d = sym([0;0]); %distance from relative body's center of mass to the joint
         lcom = sym('1'); %distance between start of body to COM of body
+        op = struct; %Other parameters
+        
         q = sym([]);
         u = sym([]);
         R = sym([]); %Rotation Matrix
@@ -23,6 +25,7 @@ classdef body2d
     
     properties (Dependent = true)
         bodyprops
+        allsyms;
     end
     
     methods (Static)
@@ -39,6 +42,17 @@ classdef body2d
     
     
     methods
+        
+        function allsyms = get.allsyms(this)
+            allsyms = {};
+            fnames = fieldnames(this.bodyprops);
+            for i = 1:length(fnames)
+                for j = 1:length(this.(fnames{i}))
+                    allsyms = [allsyms symvar(this.(fnames{i})(j))];
+                end
+            end
+            allsyms = unique(allsyms);
+        end
         
         function bodyprops = get.bodyprops(this)
             bodyprops.mass = this.mass;

@@ -34,6 +34,7 @@ classdef DynModel2D
         veldexes %Indexes of velocity states
         qs;
         us;
+        allsyms;
     end
     
     
@@ -141,6 +142,14 @@ classdef DynModel2D
                 this.bodies(this.numbodies).yaxis = this.bodies(this.numbodies-1).yaxis;
             end
             
+            %Take symbols in body property d and add each previously
+            %undeclared symbol to a new field in class property op
+            allvarsind = symvar(this.bodies(this.numbodies).d);
+            for i = 1:length(allvarsind)
+                
+            end
+%             this.bodies.op{)
+            
             this.status = this.status+1;
         end
         
@@ -237,6 +246,15 @@ classdef DynModel2D
         end
         
          %% Basic Access Methods
+         
+         function allsyms = get.allsyms(this)
+             allsyms = {};
+             for i = 1:this.numbodies
+                     allsyms = [allsyms this.bodies(i).allsyms];
+             end
+             allsyms = unique(allsyms);
+         end
+         
         function numbodies = get.numbodies(this)
             numbodies = length(this.bodies);
         end
