@@ -305,15 +305,6 @@ classdef DynModel2D
              end
          end
          
-         function body = body(this,name)
-            for i = 1:this.numbodies
-                if strcmp(this.bodies(i),name)
-                    body = this.bodies(i);
-                    return;
-                end
-            end
-         end
-         
          function allsyms = get.allsyms(this)
              allsyms = {};
              for i = 1:this.numbodies
@@ -480,46 +471,23 @@ classdef DynModel2D
                 return;
             end
             numsprings = this.springs.numsprings;
-            dof = this.dof;
+            dof = this.numbodies;
             SpringForces = sym(zeros(dof,1));
+            
             for i = 1:numsprings
-                
-                b1name = this.springs.body1{i};
-                b2name = this.springs.body2{i};
-                type = this.springs.type{i};
-                
-                
-                %Assign state variables to bodies
-                [b1,bnum1] = this.getBodyFromName(b1name);
-                if ~strcmp(b1name,'ground')
-                    [x1,y1,ang1,vx1,vy1,vang1] = getSymBodyStates(this,b1name);
-                    dex1x = 3*bnum1 - 2;
-                    dex1y = 3*bnum1 - 1;
-                    dex1ang = 3*bnum1;
-                else
-                    x1=[];y1=[];ang1=[];vx1=[];vy1=[];vang1=[];
-                    dex1x = []; dex1y = []; dex1ang = [];
-                end
-                
-                [b2,bnum2] = this.getBodyFromName(b2name);
-                if ~strcmp(b2name,'ground')
-                    [x2,y2,ang2,vx2,vy2,vang2] = getSymBodyStates(this,b2name);
-                    dex2x = 3*bnum2 - 2;
-                    dex2y = 3*bnum2 - 1;
-                    dex2ang = 3*bnum2;
-                else
-                    x2=[];y2=[];ang2=[];vx2=[];vy2=[];vang2=[];
-                    dex2x = []; dex2y = []; dex2ang = [];
-                end
-                
+                [b1,b1num] = this.getBodyFromName(this.springs.body1{i});
+                [b2,b2num] = this.getBodyFromName(this.springs.body2{i});
                 newspringforces = sym(zeros(dof,1));
                 if strcmp(type,'linear')
-                    angle = atan2((y2-y1),(x2-x1));
-                    newspringforces([dex1x dex1y]) =  -this.springs.name{i}*[(x1 - x2 - this.springs.restlength{i}*cos(angle)) (y1 - y2 - this.springs.restlength{i}*sin(angle))];
-                    newspringforces([dex2x dex2y]) =  this.springs.name{i}*[(x1 - x2 - this.springs.restlength{i}*cos(angle)) (y1 - y2 - this.springs.restlength{i}*sin(angle))];
-                else %angular
-                    newspringforces(dex1ang) = -this.springs.name{i}*(ang1 - ang2 - this.springs.restlength{i});
-                    newspringforces(dex2ang) = this.springs.name{i}*(ang1 - ang2 - this.springs.restlength{i});
+                    vec = b1.pos - b2.pos;
+                    dist = norm(vec)*sign(vec);
+                    dir = vec/dist;
+                    
+                    newspringforces(3*(b1num-1)+(1:2),1) = -this.springs.name{i}*(dist - this.springs.restlength{i})*dir;
+                    newspringforces(3*(b2num-1)+(1:2),1) = -newspringforces(3*(b1num-1)+(1:2),1);
+                elseif strcmo(type,'angular')
+                    newspringforces(3*(b1num-1)+3,1) = -this.springs.name{i}*(b1.angle - b2.angle - this.springs.restlength{i});
+                    newspringforces(3*(b2num-1)+3,1) = -newspringforces(3*(b1num-1)+3,1);
                 end
                 SpringForces = SpringForces + newspringforces;
             end
@@ -535,11 +503,10 @@ classdef DynModel2D
             DamperForces = sym(zeros(dof,1));
             %% Dampers
             for i = 1:numdampers
-                b1name = this.dampers.body1{i};
-                b2name = this.dampers.body2{i};
+                [b1name,b1num] = this.dampers.body1{i};
+                [b2name,b2num] = this.dampers.body2{i};
                 type = this.dampers.type{i};
-                %Assign state variables to bodies
-                [b1,bnum1] = this.getBodyFromName(b1name);
+                
                 if ~strcmp(b1name,'ground')
                     [x1,y1,ang1,vx1,vy1,vang1] = getSymBodyStates(this,b1name);
                     dex1x = 3*bnum1 - 2;
@@ -598,29 +565,6 @@ classdef DynModel2D
         end
         
         
-        function BodyPositions = buildBodyPositions(this)
-           this.assignMinStates;
-           BodyPositions = sym(zeros(this.dof,1));
-           
-           prevbody = sym(zeros(3,1));
-           prevangle = sym(0);
-           for i = 1:this.numbodies
-               jointtype = this.joints.joint{i};
-               [qs,~] = this.getMinSymBodyStates(this.bodies(i).bodyname);
-               if strcmp(jointtype,'Hinge')
-                  BodyPositions(3*(i-1)+[1 2],1) = r.bodies(i).lcom*[cos(qs);sin(qs)]+prevbody(1:2);
-                  BodyPositions(3*(i-1)+3,1) = qs + prevbody(3);
-                  prevangle = qs;
-               elseif strcmp(jointtype,'Slider')
-                   axisangle = prevangle+this.joints.angleoffset{i};
-                   BodyPositions(3*(i-1)+[1 2],1) = qs*[cos(axisangle);sin(axisangle)] + prevbody(1:2);
-                   BodyPositions(3*(i-1)+3,1) = qs + prevbody(3);
-               end
-           end          
-            
-        end
-        
-        
         %% Simulation
         function [xddot,constraintforces] = XDoubleDot(this,time,state)
             RHS = [this.G + this.ExForces; -this.Cdot*state(this.veldexes)];
@@ -652,73 +596,17 @@ classdef DynModel2D
             end
         end
         
-        function [x,y,ang,vx,vy,vang] = getSymBodyStates(this,bodyname)
-            
-            if strcmp('ground',bodyname)
-                x = sym(0); vx = sym(0);
-                y = sym(0); vy = sym(0);
-                ang = sym(0); vang = sym(0);
-                return;
-            end
-            
-            [~,bodynum] = this.getBodyFromName(bodyname);
-            x = sym(sprintf('x%d',bodynum));
-            y = sym(sprintf('y%d',bodynum));
-            ang = sym(sprintf('ang%d',bodynum));
-            vx = sym(sprintf('vx%d',bodynum));
-            vy = sym(sprintf('vy%d',bodynum));
-            vang = sym(sprintf('vang%d',bodynum));
-        end
         
-        function [qs,us] = getMinSymBodyStates(this,bodyname)
-            [~,bodynum] = this.getBodyFromName(bodyname);
-            num = this.bodydofs(bodynum);
-            sdex = this.bodydofdexes(bodynum)-num+1;
-            for i = 1:num
-            qs(i,1) = sym(sprintf('q%d',sdex+i-1));
-            us(i,1) = sym(sprintf('u%d',sdex+i-1)); 
-            end
-            
-        end
         
-        function [] = assignMinStates(this)
+        function [] = assignStates(this)
             ws = 'caller';
             %Create symbols for state variables
-            for i = 1:this.mindofs
+            for i = 1:this.numbodies
                 assignin(ws, sprintf('q%d',i), eval(sprintf('sym(''q%d'');',i)) );
                 assignin(ws, sprintf('u%d',i), eval(sprintf('sym(''u%d'');',i)) );
             end
         end
         
-        function [] = assignSymBodyStates(this)
-            numbodies = this.numbodies;
-            ws = 'caller';
-            %Create symbols for state variables
-            for i = 1:numbodies
-                assignin(ws, sprintf('x%d',i), eval(sprintf('sym(''x%d'');',i)) );
-                assignin(ws, sprintf('y%d',i), eval(sprintf('sym(''y%d'');',i)) );
-                assignin(ws, sprintf('ang%d',i), eval(sprintf('sym(''ang%d'');',i)) );
-                assignin(ws, sprintf('vx%d',i), eval(sprintf('sym(''vx%d'');',i)) );
-                assignin(ws, sprintf('vy%d',i), eval(sprintf('sym(''vy%d'');',i)) );
-                assignin(ws, sprintf('vang%d',i), eval(sprintf('sym(''vang%d'');',i)) );
-            end
-        end
-        
-        function vels = SymVels(this)
-            numbodies = this.numbodies;
-            vxs = sym('vx',[1 numbodies]);
-            vys = sym('vy',[1 numbodies]);
-            vangs = sym('vang',[1 numbodies]);
-            vels = [vxs; vys; vangs];
-            vels = reshape(vels,numbodies*3,1);
-        end
-        
-        function BodyNames = getBodyNames(this)
-            BodyNames = cell(1,this.numbodies);
-            for i = 1:this.numbodies;
-                BodyNames{1,i} = this.bodies(i).bodyname;
-            end
-        end
         
         
         
