@@ -12,10 +12,9 @@ classdef body2d
         
         q = sym([]);
         u = sym([]);
-        R = sym([]); %Rotation Matrix
-        xaxis = sym([]);
-        yaxis = sym([]);
         angle = sym([]); %angle of x axis from ground
+        pos = sym([]);
+        vel = sym([]);
         
         %DOF info
         relativebody = []; %Body to which joint is attached
@@ -26,6 +25,9 @@ classdef body2d
     properties (Dependent = true)
         bodyprops
         allsyms;
+        R; %Rotation Matrix from ground frame to body Frame
+        xaxis; %xaxis of body frame
+        yaxis; %yaxis of body frame
     end
     
     methods (Static)
@@ -42,6 +44,18 @@ classdef body2d
     
     
     methods
+        
+        function R = get.R(this)
+           R = [cos(this.ang) sin(this.ang); -sin(this.ang) cos(this.ang)]; 
+        end
+        
+        function xaxis = get.xaxis(this)
+            xaxis = this.R*[1;0];
+        end
+        
+        function yaxis = get.yaxis(this)
+            yaxis = this.R*[0;1];
+        end
         
         function allsyms = get.allsyms(this)
             allsyms = {};

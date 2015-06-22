@@ -9,9 +9,12 @@ classdef DynModel2D
         springs = struct('body1',cell(1),'body2',cell(1),'type',cell(1),'name',cell(1),...
                          'restlength',cell(1),'attachvec1',sym([0;0]),'attachvec2',sym([0;0]),'numsprings',0);
         dampers = struct('body1',cell(1),'body2',cell(1),'type',cell(1),'name',cell(1),'numdampers',0);
-        phases = cell(1);
+        phases = cell(1); %A cell array of the names of the phases
         groundslopeangle = sym(0); %Angle of the ground
-        status = 0; % keeps track of whether new elements have been added to the model
+        status = 0; % keeps track of whether new elements have been added/changed in the model     
+    end
+    
+    properties (SetAccess = protected)
         
         frames = struct; %Field for each DOF, subfields for each 2D unit vec in that frame
         positions = struct; %Field for each body, 2D vector for each body
@@ -24,6 +27,7 @@ classdef DynModel2D
         ExForces = sym([]); %External Forces (springs, dampers, etc.)
         RHS = sym([]); % Big right hand side, accounting for all Forces and Constraints
         MM = sym([]); %Big Mass Matrix, accounting for all masses and constraints
+        
     end
     
     properties (Dependent = true)
@@ -142,13 +146,6 @@ classdef DynModel2D
                 this.bodies(this.numbodies).yaxis = this.bodies(this.numbodies-1).yaxis;
             end
             
-            %Take symbols in body property d and add each previously
-            %undeclared symbol to a new field in class property op
-            allvarsind = symvar(this.bodies(this.numbodies).d);
-            for i = 1:length(allvarsind)
-                
-            end
-%             this.bodies.op{)
             
             newbody = this.bodies(this.numbodies);
             this.status = this.status+1;
