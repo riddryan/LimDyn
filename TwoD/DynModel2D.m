@@ -19,6 +19,7 @@ classdef DynModel2D
         frames = struct; %Field for each DOF, subfields for each 2D unit vec in that frame
         Jv = sym([]); %Velocity jacobian
         Jw = sym([]); %Angular Velocity Jacobian
+        J = sym([]); %Jacobian for all rigid body velocities
         M = sym([]); %Maximal Mass Matrix
         C = {sym([])}; %Constraint Matrix
         Cdot = {sym([])}; %Derivative of constraint matrix
@@ -368,6 +369,10 @@ classdef DynModel2D
         %% Dynamics Calculations
         
         function Jv = buildJv(this)
+            if ~this.status
+                Jv = this.Jv;
+                return;
+            end
             eqns = sym(zeros(2*this.numbodies,1));
            for i = 1:this.numbodies
               eqns(2*(i-1)+1) = this.vel.(this.bodynames{i})(1) == 0; 
@@ -376,11 +381,27 @@ classdef DynModel2D
            Jv = equationsToMatrix(eqns,this.us);
         end
         function Jw = buildJw(this)
+            if ~this.status
+                Jw = this.Jw;
+                return;
+            end
             eqns = sym(zeros(this.numbodies,1));
             for i = 1:this.numbodies
                 eqns(i) = this.angvel.(this.bodynames{i})(1) == 0;
             end
             Jw = equationsToMatrix(eqns,this.us);
+        end
+        
+        function J = buildJ(this)
+           if ~this.status
+               J = this.J;
+               return;
+           end
+           J = sym(zeros(3*this.numbodies, this.numbodies));
+           for i = 1:this.numbodies
+               J(3*(i-1)+(1:2),:) = this.Jv(2*(i-1)+(1:2),:);
+               J(3*(i-1)+3,:) = this.Jw(i,:);
+           end
         end
         
         function Cdot = buildCdot(this)
