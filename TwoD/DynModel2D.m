@@ -36,6 +36,7 @@ classdef DynModel2D
         numbodies %number of rigid bodies
         pos
         vel
+        angvel
         gravity %gravity vector
         posdexes %Indexes of position states
         veldexes %Indexes of velocity states
@@ -152,6 +153,7 @@ classdef DynModel2D
             %Body velocity equal to time derivative of Body.pos
             for i = 1:this.numbodies
                Body.vel = Body.vel + diff(Body.pos,this.qs(i))*this.us(i);
+               Body.angvel = Body.angvel + diff(Body.angle,this.qs(i))*this.us(i);
             end
             
             this.bodies(num) = Body;
@@ -288,6 +290,17 @@ classdef DynModel2D
              end
          end
          
+         function angvel = get.angvel(this)
+             if this.numbodies==0
+                 angvel = [];
+                 return;
+             end
+             
+             for i = 1:this.numbodies
+                 angvel.(this.bodies(i).bodyname) = this.bodies(i).angvel;
+             end
+         end
+         
          function body = body(this,name)
             for i = 1:this.numbodies
                 if strcmp(this.bodies(i),name)
@@ -355,12 +368,19 @@ classdef DynModel2D
         %% Dynamics Calculations
         
         function Jv = buildJv(this)
-            eqns = sym(zeros(this.numbodies,1));
+            eqns = sym(zeros(2*this.numbodies,1));
            for i = 1:this.numbodies
               eqns(2*(i-1)+1) = this.vel.(this.bodynames{i})(1) == 0; 
               eqns(2*(i-1)+2) = this.vel.(this.bodynames{i})(2) == 0; 
            end
            Jv = equationsToMatrix(eqns,this.us);
+        end
+        function Jw = buildJw(this)
+            eqns = sym(zeros(this.numbodies,1));
+            for i = 1:this.numbodies
+                eqns(i) = this.angvel.(this.bodynames{i})(1) == 0;
+            end
+            Jw = equationsToMatrix(eqns,this.us);
         end
         
         function Cdot = buildCdot(this)

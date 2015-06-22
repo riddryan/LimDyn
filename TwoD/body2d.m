@@ -12,6 +12,7 @@ classdef body2d
         q = sym([]);
         u = sym([]);
         angle = sym([]); %angle of x axis from ground
+        angvel = sym([]);
         pos = sym([0;0]);
         vel = sym([0;0]);
         
