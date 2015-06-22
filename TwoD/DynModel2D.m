@@ -506,46 +506,35 @@ classdef DynModel2D
                 DamperForces = this.DamperForces;
                 return;
             end
-            numdampers = this.dampers.numdampers;
-            dof = this.dof;
+            
+            dof = 3*this.numbodies;
             DamperForces = sym(zeros(dof,1));
-            %% Dampers
-            for i = 1:numdampers
-                [b1name,b1num] = this.dampers.body1{i};
-                [b2name,b2num] = this.dampers.body2{i};
-                type = this.dampers.type{i};
-                
-                if ~strcmp(b1name,'ground')
-                    [x1,y1,ang1,vx1,vy1,vang1] = getSymBodyStates(this,b1name);
-                    dex1x = 3*bnum1 - 2;
-                    dex1y = 3*bnum1 - 1;
-                    dex1ang = 3*bnum1;
-                else
-                    x1=[];y1=[];ang1=[];vx1=[];vy1=[];vang1=[];
-                    dex1x = []; dex1y = []; dex1ang = [];
-                end
-                
-                [b2,bnum2] = this.getBodyFromName(b2name);
-                if ~strcmp(b2name,'ground')
-                    [x2,y2,ang2,vx2,vy2,vang2] = getSymBodyStates(this,b2name);
-                    dex2x = 3*bnum2 - 2;
-                    dex2y = 3*bnum2 - 1;
-                    dex2ang = 3*bnum2;
-                else
-                    x2=[];y2=[];ang2=[];vx2=[];vy2=[];vang2=[];
-                    dex2x = []; dex2y = []; dex2ang = [];
-                end
-                
+            
+            for i = 1:this.dampers.numdampers
+                [b1,b1num] = this.getBodyFromName(this.springs.body1{i});
+                [b2,b2num] = this.getBodyFromName(this.springs.body2{i});
                 newdamperforces = sym(zeros(dof,1));
-                if strcmp(type,'linear')
-                        newdamperforces([dex1x dex1y]) = -this.dampers.name{i}*[(vx1-vx2) (vy1-vy2)];
-                        newdamperforces([dex2x dex2y]) =  this.dampers.name{i}*[(vx1-vx2) (vy1-vy2)];
+                if strcmp(this.springs.type{i},'linear')
+                    vec = b1.vel - b2.vel;
+                    dir = vec/norm(vec);
+                    dist = transpose(vec)*dir;
+                    if b1num>0
+                        newdamperforces(3*(b1num-1)+(1:2),1) = -this.dampers.name{i}*(dist)*dir;
+                    end
+                    if b2num>0
+                        newdamperforces(3*(b2num-1)+(1:2),1) = this.dampers.name{i}*(dist)*dir;
+                    end
                 else
-                        newdamperforces(dex1ang) = -this.dampers.name{i}*(vang1 - vang2);
-                        newdamperforces(dex2ang) = this.dampers.name{i}*(vang1 - vang2);
+                    if b1num>0
+                        newdamperforces(3*(b1num-1)+3,1) = -this.dampers.name{i}*(b1.angvel - b2.angvel);
+                    end
+                    if b2num>0
+                        newdamperforces(3*(b2num-1)+3,1) = this.dampers.name{i}*(b1.angvel - b2.angvel);
+                    end
                 end
                 DamperForces = DamperForces + newdamperforces;
             end
+            DamperForces = transpose(this.J) * DamperForces;
         end
         
         function ExForces = buildExForces(this)
@@ -561,7 +550,13 @@ classdef DynModel2D
                 RHS = this.RHS;
                 return;
             end
-            RHS = [this.G + this.ExForces; -this.Cdot*this.SymVels];
+            for i = 1:length(this.phases)
+                if ~isempty(this.Cdot{i})
+                RHS{i} = [this.G + this.ExForces; -this.Cdot{i}*this.us];
+                else
+                 RHS{i} = [this.G + this.ExForces];   
+                end
+            end
         end
         
         function MM = buildMM(this)
@@ -569,7 +564,13 @@ classdef DynModel2D
                 MM = this.MM;
                 return;
             end
-            MM = [this.M this.C.'; this.C zeros(size(this.C,1))];
+            for i = 1:length(this.phases)
+                if ~isempty(this.C{i})
+                MM{i} = [this.M this.C{i}.'; this.C zeros(size(this.C{i},1))];
+                else
+                   MM{i} = this.M; 
+                end
+            end
         end
         
         
