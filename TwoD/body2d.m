@@ -44,7 +44,7 @@ classdef body2d
     methods
         
         function R = get.R(this)
-           R = [cos(this.ang) sin(this.ang); -sin(this.ang) cos(this.ang)]; 
+           R = [cos(this.angle) sin(this.angle); -sin(this.angle) cos(this.angle)]; 
         end
         
         function xaxis = get.xaxis(this)

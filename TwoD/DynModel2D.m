@@ -17,7 +17,8 @@ classdef DynModel2D
     properties (SetAccess = protected)
         
         frames = struct; %Field for each DOF, subfields for each 2D unit vec in that frame
-        positions = struct; %Field for each body, 2D vector for each body
+        Jv = sym([]); %Velocity jacobian
+        Jw = sym([]); %Angular Velocity Jacobian
         M = sym([]); %Maximal Mass Matrix
         C = {sym([])}; %Constraint Matrix
         Cdot = {sym([])}; %Derivative of constraint matrix
@@ -36,7 +37,6 @@ classdef DynModel2D
         pos
         vel
         gravity %gravity vector
-        dof %degrees of freedom in the system
         posdexes %Indexes of position states
         veldexes %Indexes of velocity states
         qs;
@@ -132,8 +132,8 @@ classdef DynModel2D
             %DOF/Joint information
             Body.relativebody = relativebody;
             Body.joint = joint;
-            Body.q = sym(sprintf('q%d',this.dof));
-            Body.u = sym(sprintf('u%d',this.dof));
+            Body.q = sym(sprintf('q%d',num));
+            Body.u = sym(sprintf('u%d',num));
             
             if strcmp(joint,'hinge')
                 Body.angle = Body.q;
@@ -143,7 +143,11 @@ classdef DynModel2D
             
             %Body position equal to prev body COM, plus the vector Body.d, plus
             %the length Body.lcom along the direction Body.angle
-            Body.pos = this.bodies(num-1).pos + Body.d + Body.lcom*[cos(Body.angle);sin(Body.angle)];
+            if num>1
+                Body.pos = this.bodies(num-1).pos + Body.d + Body.lcom*[cos(Body.angle);sin(Body.angle)];
+            else
+                Body.pos = Body.d + Body.lcom*[cos(Body.angle);sin(Body.angle)];
+            end
             
             %Body velocity equal to time derivative of Body.pos
             for i = 1:this.numbodies
@@ -264,12 +268,21 @@ classdef DynModel2D
             end
          end
          function pos = get.pos(this)
+             if this.numbodies==0
+                pos = [];
+                return;
+             end
             for i = 1:this.numbodies
                 pos.(this.bodies(i).bodyname) = this.bodies(i).pos;
             end
          end
          
          function vel = get.vel(this)
+             if this.numbodies==0
+                 vel = [];
+                 return;
+             end
+             
              for i = 1:this.numbodies
                  vel.(this.bodies(i).bodyname) = this.bodies(i).vel;
              end
@@ -295,15 +308,7 @@ classdef DynModel2D
         function numbodies = get.numbodies(this)
             numbodies = length(this.bodies);
         end
-        
-        function dof = get.dof(this)
-            dof = 0;
-            for i = 1:this.numbodies
-                if any(strcmp(this.bodies(i).joint,{'hinge' 'slider'}))
-                    dof = dof + 1;
-                end
-            end
-        end
+       
         
         function posdexes = get.posdexes(this)
             posdexes = 1:(this.dof/2);
@@ -314,10 +319,10 @@ classdef DynModel2D
         end
         
         function qs = get.qs(this)
-           qs =  sym('q',[this.dof 1]);
+           qs =  sym('q',[this.numbodies 1]);
         end
         function us = get.us(this)
-            us =  sym('u',[this.dof 1]);
+            us =  sym('u',[this.numbodies 1]);
         end
         
         function this = set.bodies(this,newbodies)
@@ -349,12 +354,13 @@ classdef DynModel2D
         
         %% Dynamics Calculations
         
-        function J = buildJ(this)
+        function Jv = buildJv(this)
             eqns = sym(zeros(this.numbodies,1));
            for i = 1:this.numbodies
-              eqns(i) = this.vel.(this.bodynames{i}) == 0; 
+              eqns(2*(i-1)+1) = this.vel.(this.bodynames{i})(1) == 0; 
+              eqns(2*(i-1)+2) = this.vel.(this.bodynames{i})(2) == 0; 
            end
-           J = equationsToMatrix(eqns,this.us);
+           Jv = equationsToMatrix(eqns,this.us);
         end
         
         function Cdot = buildCdot(this)
@@ -393,14 +399,15 @@ classdef DynModel2D
                return;
             end
             numbodies = this.numbodies;
-            G = sym(zeros(numbodies*3,1));
+            G = sym(zeros(numbodies*2,1));
             
             for i = 1:numbodies
                 graveffect = this.bodies(i).mass*this.gravity;
-                G(3*(i-1)+1,1) = graveffect(1);
-                G(3*(i-1)+2,1) = graveffect(2);
-                G(3*(i-1)+3,1) = 0;
+                G(2*(i-1)+1,1) = graveffect(1);
+                G(2*(i-1)+2,1) = graveffect(2);
             end
+            
+            G = transpose(this.Jv)*G;
 
         end
         
