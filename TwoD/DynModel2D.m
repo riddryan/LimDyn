@@ -31,7 +31,10 @@ classdef DynModel2D
     end
     
     properties (Dependent = true)
+        bodynames
         numbodies %number of rigid bodies
+        pos
+        vel
         gravity %gravity vector
         dof %degrees of freedom in the system
         posdexes %Indexes of position states
@@ -196,12 +199,16 @@ classdef DynModel2D
             this.springs.body1{num} = body1name;
             this.springs.body2{num} = body2name;
             this.springs.type{num} = type;
+            this.springs.attachvec1{num} = attachvec1;
+            this.springs.attachvec2{num} = attachvec2;
             this.status=this.status+1;
         end
         
         function [this] = addDamper(this,body1name,body2name,varargin)
             type = 'linear';
             dampername = [];
+                        attachvec1 = sym([0;0]); %Where the damper is attached to body1 relative to its COM
+            attachvec2 = sym([0;0]); %Where the damper is attached to body2 relative to its COM
             
             for i = 1 : 2 : length(varargin)
                 option = varargin{i};
@@ -211,6 +218,10 @@ classdef DynModel2D
                         type = val;
                     case 'dampername'
                         dampername = val;
+                    case 'attachvec1'
+                        attachvec1 = val;
+                    case 'attachvec2'
+                        attachvec2 = val;
                 end
             end
             
@@ -230,20 +241,39 @@ classdef DynModel2D
             this.dampers.body1{num} = body1name;
             this.dampers.body2{num} = body2name;
             this.dampers.type{num} = type;
+            this.dampers.attachvec1{num} = attachvec1;
+            this.dampers.attachvec2{num} = attachvec2;
             this.status=this.status+1;
         end
         
         function [this] = addPhase(this,name,constraints,varargin)
             this.phases{end+1} = name;
             if ~isempty(constraints)
-                this.C{end+1} = equationsToMatrix(constraints,r.us);
+                this.C{end+1} = equationsToMatrix(constraints,this.us);
             else
                 this.C{end+1} = [];
             end
             this.status = this.status+1;
         end
         
-         %% Basic Access Methods
+         %% Access Methods
+         function bodynames = get.bodynames(this)
+             bodynames = cell(1,this.numbodies);
+            for i = 1:this.numbodies
+               bodynames{i} = this.bodies(i).bodyname; 
+            end
+         end
+         function pos = get.pos(this)
+            for i = 1:this.numbodies
+                pos.(this.bodies(i).bodyname) = this.bodies(i).pos;
+            end
+         end
+         
+         function vel = get.vel(this)
+             for i = 1:this.numbodies
+                 vel.(this.bodies(i).bodyname) = this.bodies(i).vel;
+             end
+         end
          
          function body = body(this,name)
             for i = 1:this.numbodies
@@ -319,15 +349,12 @@ classdef DynModel2D
         
         %% Dynamics Calculations
         
-        function positions = buildPositions(this)
-            if ~this.status
-                positions = this.positions;
-                return;
-            end
-            
-            for i = 1:this.numbodies
-                
-            end
+        function J = buildJ(this)
+            eqns = sym(zeros(this.numbodies,1));
+           for i = 1:this.numbodies
+              eqns(i) = this.vel.(this.bodynames{i}) == 0; 
+           end
+           J = equationsToMatrix(eqns,this.us);
         end
         
         function Cdot = buildCdot(this)
