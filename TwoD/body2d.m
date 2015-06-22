@@ -37,6 +37,8 @@ classdef body2d
            ground.mass = sym('0');
            ground.d = sym([0 0]);
            ground.lcom = sym('0');
+           ground.q = sym('0');
+           ground.u = sym('0');
         end
         
     end

@@ -7,7 +7,7 @@ classdef DynModel2D
 %         joints = struct('constrainedbody',cell(1),'relativebody',cell(1),...
 %             'joint',cell(1),'angleoffset',0,'numjoints',0); %joint info structure
         springs = struct('body1',cell(1),'body2',cell(1),'type',cell(1),'name',cell(1),...
-                         'restlength',cell(1),'attachvec1',sym([0;0]),'attachvec2',sym([0;0]),'numsprings',0);
+                         'restlength',cell(1),'attachvec1',cell(1),'attachvec2',cell(1),'numsprings',0);
         dampers = struct('body1',cell(1),'body2',cell(1),'type',cell(1),'name',cell(1),'numdampers',0);
         phases = cell(1); %A cell array of the names of the phases
         groundslopeangle = sym(0); %Angle of the ground
@@ -471,26 +471,27 @@ classdef DynModel2D
                 return;
             end
             numsprings = this.springs.numsprings;
-            dof = this.numbodies;
+            dof = 3*this.numbodies;
             SpringForces = sym(zeros(dof,1));
             
             for i = 1:numsprings
                 [b1,b1num] = this.getBodyFromName(this.springs.body1{i});
                 [b2,b2num] = this.getBodyFromName(this.springs.body2{i});
                 newspringforces = sym(zeros(dof,1));
-                if strcmp(type,'linear')
+                if strcmp(this.springs.type{i},'linear')
                     vec = b1.pos - b2.pos;
                     dist = norm(vec)*sign(vec);
                     dir = vec/dist;
                     
                     newspringforces(3*(b1num-1)+(1:2),1) = -this.springs.name{i}*(dist - this.springs.restlength{i})*dir;
                     newspringforces(3*(b2num-1)+(1:2),1) = -newspringforces(3*(b1num-1)+(1:2),1);
-                elseif strcmo(type,'angular')
+                else
                     newspringforces(3*(b1num-1)+3,1) = -this.springs.name{i}*(b1.angle - b2.angle - this.springs.restlength{i});
                     newspringforces(3*(b2num-1)+3,1) = -newspringforces(3*(b1num-1)+3,1);
                 end
                 SpringForces = SpringForces + newspringforces;
             end
+            SpringForces = transpose(this.J) * SpringForces;
         end
         
         function [DamperForces] = buildDamperForces(this)
@@ -584,7 +585,7 @@ classdef DynModel2D
             
             if strcmp('ground',bodyname)
                 body = body2d.ground;
-                bodynum = 0;
+                bodynum = [];
                 return;
             end
             for i = 1:this.numbodies
