@@ -8,6 +8,7 @@ r.name = 'double_pendulum';
 
 % 
 r = r.addSpring('shank','thigh','type','angular');
+r = r.addSpring('shank','thigh','type','linear');
 % r = r.addDamper('shank','thigh','type','angular');
 
 % r = r.Build;

@@ -480,14 +480,21 @@ classdef DynModel2D
                 newspringforces = sym(zeros(dof,1));
                 if strcmp(this.springs.type{i},'linear')
                     vec = b1.pos - b2.pos;
-                    dist = norm(vec)*sign(vec);
-                    dir = vec/dist;
-                    
+                    dir = vec/norm(vec);
+                    dist = transpose(vec)*dir;
+                    if b1num>0
                     newspringforces(3*(b1num-1)+(1:2),1) = -this.springs.name{i}*(dist - this.springs.restlength{i})*dir;
-                    newspringforces(3*(b2num-1)+(1:2),1) = -newspringforces(3*(b1num-1)+(1:2),1);
+                    end
+                    if b2num>0
+                    newspringforces(3*(b2num-1)+(1:2),1) = this.springs.name{i}*(dist - this.springs.restlength{i})*dir;
+                    end
                 else
+                    if b1num>0
                     newspringforces(3*(b1num-1)+3,1) = -this.springs.name{i}*(b1.angle - b2.angle - this.springs.restlength{i});
-                    newspringforces(3*(b2num-1)+3,1) = -newspringforces(3*(b1num-1)+3,1);
+                    end
+                    if b2num>0
+                    newspringforces(3*(b2num-1)+3,1) = this.springs.name{i}*(b1.angle - b2.angle - this.springs.restlength{i});
+                    end
                 end
                 SpringForces = SpringForces + newspringforces;
             end

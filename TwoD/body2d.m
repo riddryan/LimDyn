@@ -39,6 +39,7 @@ classdef body2d
            ground.lcom = sym('0');
            ground.q = sym('0');
            ground.u = sym('0');
+           ground.angle = sym('0');
         end
         
     end
