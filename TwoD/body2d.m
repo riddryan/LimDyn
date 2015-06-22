@@ -8,18 +8,16 @@ classdef body2d
         inertia = sym('0'); 
         d = sym([0;0]); %distance from relative body's center of mass to the joint
         lcom = sym('1'); %distance between start of body to COM of body
-        op = struct; %Other parameters
         
         q = sym([]);
         u = sym([]);
         angle = sym([]); %angle of x axis from ground
-        pos = sym([]);
-        vel = sym([]);
+        pos = sym([0;0]);
+        vel = sym([0;0]);
         
         %DOF info
         relativebody = []; %Body to which joint is attached
         joint = []; %type of joint
-        jointaxis = [ ]; %axis of joint
     end
     
     properties (Dependent = true)

@@ -62,7 +62,7 @@ classdef DynModel2D
         
         %% User-Input Model Specification
         
-        function [this,newbody] = addBody(this,bodyname,relativebody,joint,varargin)
+        function [this,Body] = addBody(this,bodyname,relativebody,joint,varargin)
             %Creates a new bodye.  You can set
             %its properties bodyname, mass, inertia, length (d), and lcom.
             %
@@ -78,7 +78,7 @@ classdef DynModel2D
             %relativebody
             
             mass = sym([]); inertia = sym([]); d = sym([0;0]); lcom = sym([]);
-            axis = [1 0];
+            angle = sym(0);
             
             for i = 1 : 2 : length(varargin)
                 option = varargin{i};
@@ -92,9 +92,13 @@ classdef DynModel2D
                         d = val;
                     case 'lcom'
                         lcom = val;
-                    case 'axis'
-                        axis = val;
+                    case 'angle'
+                        angle = val;
                 end
+            end
+            
+            if strcmp(joint,'Hinge') && angle~=0
+               warning('You cannot set Hinge angle in 2D.') 
             end
             
             Body = body2d;
@@ -106,48 +110,44 @@ classdef DynModel2D
                 this.bodies = Body;
             end
            
+            num = this.numbodies;
             
             %Assign dynamic properties of the new body
             for i = 1:length(BodyPropNames)
                 %Assign the property to user input value
-                this.bodies(this.numbodies).(BodyPropNames{i}) =  eval(BodyPropNames{i});
+                Body.(BodyPropNames{i}) =  eval(BodyPropNames{i});
                 
                 %If user input no value, give it a default value based on
                 %the number of the body that is
-                if isempty(this.bodies(this.numbodies).(BodyPropNames{i}))
-                        this.bodies(this.numbodies).(BodyPropNames{i}) = eval( sprintf('sym('' %s%d '')', BodyPropNames{i}, this.numbodies) );
+                if isempty(Body.(BodyPropNames{i}))
+                        Body.(BodyPropNames{i}) = eval( sprintf('sym('' %s%d '')', BodyPropNames{i}, num) );
                 end
                 
             end
             
-            %Only one way to have a hinge joint in 2D; don't actually need
-            %the axis field for it but will put it in for the heck of it
-            if strcmp(joint,'hinge')
-               axis = [0 0 1]; 
-            end
             
             %DOF/Joint information
-            this.bodies(this.numbodies).relativebody = relativebody;
-            this.bodies(this.numbodies).joint = joint;
-            this.bodies(this.numbodies).jointaxis = axis;
-            this.bodies(this.numbodies).q = sym(sprintf('q%d',this.dof));
-            this.bodies(this.numbodies).u = sym(sprintf('u%d',this.dof));
+            Body.relativebody = relativebody;
+            Body.joint = joint;
+            Body.q = sym(sprintf('q%d',this.dof));
+            Body.u = sym(sprintf('u%d',this.dof));
             
             if strcmp(joint,'hinge')
-                ang = this.bodies(this.numbodies).q;
-                this.bodies(this.numbodies).angle = ang;
-                this.bodies(this.numbodies).R = [cos(ang) sin(ang); -sin(ang) cos(ang)];
-                this.bodies(this.numbodies).xaxis = this.bodies(this.numbodies).R*[1;0];
-                this.bodies(this.numbodies).yaxis = this.bodies(this.numbodies).R*[0;1];
+                Body.angle = Body.q;
             else
-                this.bodies(this.numbodies).angle = this.bodies(this.numbodies-1).angle;
-                this.bodies(this.numbodies).R = this.bodies(this.numbodies-1).R;
-                this.bodies(this.numbodies).xaxis = this.bodies(this.numbodies-1).xaxis;
-                this.bodies(this.numbodies).yaxis = this.bodies(this.numbodies-1).yaxis;
+                Body.angle = angle;
             end
             
+            %Body position equal to prev body COM, plus the vector Body.d, plus
+            %the length Body.lcom along the direction Body.angle
+            Body.pos = this.bodies(num-1).pos + Body.d + Body.lcom*[cos(Body.angle);sin(Body.angle)];
             
-            newbody = this.bodies(this.numbodies);
+            %Body velocity equal to time derivative of Body.pos
+            for i = 1:this.numbodies
+               Body.vel = Body.vel + diff(Body.pos,this.qs(i))*this.us(i);
+            end
+            
+            this.bodies(num) = Body;
             this.status = this.status+1;
         end
         
