@@ -8,7 +8,7 @@ r.name = 'double_pendulum';
 
 % 
 r = r.addSpring('shank','thigh','type','angular');
-r = r.addSpring('shank','thigh','type','linear');
+r = r.addSpring('shank','thigh','type','linear','attachvec1','testl'*shank.xaxis);
 
 r = r.addDamper('shank','thigh','type','angular');
 r = r.addDamper('shank','thigh','type','linear');

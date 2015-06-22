@@ -482,12 +482,20 @@ classdef DynModel2D
                     vec = b1.pos - b2.pos;
                     dir = vec/norm(vec);
                     dist = transpose(vec)*dir;
+                    forcevec = -this.springs.name{i}*(dist - this.springs.restlength{i})*dir;
                     if b1num>0
-                    newspringforces(3*(b1num-1)+(1:2),1) = -this.springs.name{i}*(dist - this.springs.restlength{i})*dir;
+                    newspringforces(3*(b1num-1)+(1:2),1) = forcevec;
                     end
                     if b2num>0
-                    newspringforces(3*(b2num-1)+(1:2),1) = this.springs.name{i}*(dist - this.springs.restlength{i})*dir;
+                    newspringforces(3*(b2num-1)+(1:2),1) = -forcevec;
                     end
+                    
+                    %Compute torque on body from attachvec offset
+                        r1 = this.springs.attachvec1{i};
+                        r2 = this.springs.attachvec2{i};
+                        newspringforces(3*(b1num-1)+3,1) = r1(1)*forcevec(2) - r1(2)*forcevec(1);
+                        newspringforces(3*(b2num-1)+3,1) = -(r2(1)*forcevec(2) - r2(2)*forcevec(1));
+                    
                 else
                     if b1num>0
                     newspringforces(3*(b1num-1)+3,1) = -this.springs.name{i}*(b1.angle - b2.angle - this.springs.restlength{i});
