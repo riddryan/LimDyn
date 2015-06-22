@@ -53,10 +53,13 @@ classdef DynModel2D
         
        %%
        function [this] = Build(this)
-           this.M = this.buildM;
-           this.C = this.buildC;
-           this.Cdot = this.buildCdot;
+           this.Jv = this.buildJv;
+           this.Jw = this.buildJw;
+           this.J = this.buildJ;
            this.G = this.buildG;
+           this.M = this.buildM;
+           this.Cdot = this.buildCdot;
+           
            this.SpringForces = this.buildSpringForces;
            this.DamperForces = this.buildDamperForces;
            this.ExForces = this.buildExForces;
@@ -468,6 +471,7 @@ classdef DynModel2D
                 M(3*(i-1)+3,3*(i-1)+3) = this.bodies(i).inertia;
             end
             
+            M = transpose(this.J) * M * this.J;
         end
         
         function SpringForces = buildSpringForces(this)
@@ -593,25 +597,6 @@ classdef DynModel2D
             MM = [this.M this.C.'; this.C zeros(size(this.C,1))];
         end
         
-        function J = buildJ(this)
-%             if ~this.status
-%                 J = this.J;
-%                 return;
-%             end
-            
-%            bodiesconstrainedtoground = this.joints.constrainedbody{strcmp(this.joints.relativebody,'ground')};
-%            if isa(bodiesconstrainedtoground,'cell')
-%                rootbody = bodiesconstrainedtoground{1};
-%            else
-%               rootbody = bodiesconstrainedtoground; 
-%            end
-%            
-           J = sym(zeros(this.dof,this.mindofs));
-           for i = 1:this.numbodies
-               
-           end
-           
-        end
         
         function BodyPositions = buildBodyPositions(this)
            this.assignMinStates;
