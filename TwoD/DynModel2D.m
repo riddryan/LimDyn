@@ -465,6 +465,25 @@ classdef DynModel2D
             M = transpose(this.J) * M * this.J;
         end
         
+        function CC = buildCC(this)
+            
+            if ~this.status
+                CC = this.CC;
+                return;
+            end
+            sz=size(this.M,1);
+            c = zeros(sz,sz,sz);
+            for i=1:sz
+                for j=1:sz
+                    for k=1:sz
+                        c(i,j,k)=1/2*(diff(D(i,j),this.qs(k)) + diff(D(i,k),this.qs(j)) - diff(D(k,j),this.qs(i)))*this.us(k);
+                    end
+                    CC(i,j) = sum(c(j,i,:));
+                end
+            end
+            CC=simple(CC);
+        end
+        
         function SpringForces = buildSpringForces(this)
             if ~this.status
                 SpringForces = this.SpringForces;
