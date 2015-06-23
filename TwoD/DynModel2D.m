@@ -24,6 +24,7 @@ classdef DynModel2D
         C = {sym([])}; %Constraint Matrix
         Cdot = {sym([])}; %Derivative of constraint matrix
         G = sym([]); %Forces due to gravity
+        CC = sym([]); %Coriolis & Centripetal Forces
         SpringForces = sym([]); %Forces from Springs
         DamperForces = sym([]); %Forces from Dampers
         ExForces = sym([]); %External Forces (springs, dampers, etc.)
@@ -58,6 +59,7 @@ classdef DynModel2D
            this.J = this.buildJ;
            this.G = this.buildG;
            this.M = this.buildM;
+           this.CC = this.buildCC;
            this.Cdot = this.buildCdot;
            
            this.SpringForces = this.buildSpringForces;
@@ -153,12 +155,14 @@ classdef DynModel2D
             else
                 Body.pos = Body.d + Body.lcom*[cos(Body.angle);sin(Body.angle)];
             end
+            Body.pos = simple(Body.pos);
             
             %Body velocity equal to time derivative of Body.pos
             for i = 1:this.numbodies
                Body.vel = Body.vel + diff(Body.pos,this.qs(i))*this.us(i);
                Body.angvel = Body.angvel + diff(Body.angle,this.qs(i))*this.us(i);
             end
+            Body.vel = simple(Body.vel); Body.angvel = simple(Body.angvel);
             
             this.bodies(num) = Body;
             this.status = this.status+1;
@@ -372,7 +376,7 @@ classdef DynModel2D
               eqns(2*(i-1)+1) = this.vel.(this.bodynames{i})(1) == 0; 
               eqns(2*(i-1)+2) = this.vel.(this.bodynames{i})(2) == 0; 
            end
-           Jv = equationsToMatrix(eqns,this.us);
+           Jv = simple(equationsToMatrix(eqns,this.us));
         end
         function Jw = buildJw(this)
             if ~this.status
@@ -384,6 +388,8 @@ classdef DynModel2D
                 eqns(i) = this.angvel.(this.bodynames{i})(1) == 0;
             end
             Jw = equationsToMatrix(eqns,this.us);
+            
+            Jw = simple(Jw);
         end
         
         function J = buildJ(this)
@@ -420,11 +426,13 @@ classdef DynModel2D
                             for k = 1:length(this.qs) %each state
                                 %Take the partial derivative of C(i,j) w.r.t.
                                 %to each dof
-                                Cdot(i,j) = eval(sprintf('Cdot{c}(i,j) + diff(C{c}(i,j),q%d)*u%d',k,k));
+                                Cdot(i,j) = Cdot{c}(i,j) + diff(C{c}(i,j),this.qs(k))*this.us(k);
                             end
                     end
                 end
             end
+            
+            Cdot = simple(Cdot);
      
         end
         
@@ -442,7 +450,7 @@ classdef DynModel2D
                 G(2*(i-1)+2,1) = graveffect(2);
             end
             
-            G = transpose(this.Jv)*G;
+            G = simple(transpose(this.Jv)*G);
 
         end
         
@@ -462,7 +470,7 @@ classdef DynModel2D
                 M(3*(i-1)+3,3*(i-1)+3) = this.bodies(i).inertia;
             end
             
-            M = transpose(this.J) * M * this.J;
+            M = simple(transpose(this.J) * M * this.J);
         end
         
         function CC = buildCC(this)
@@ -525,7 +533,7 @@ classdef DynModel2D
                 end
                 SpringForces = SpringForces + newspringforces;
             end
-            SpringForces = transpose(this.J) * SpringForces;
+            SpringForces = simple(transpose(this.J) * SpringForces);
         end
         
         function [DamperForces] = buildDamperForces(this)
@@ -561,7 +569,7 @@ classdef DynModel2D
                 end
                 DamperForces = DamperForces + newdamperforces;
             end
-            DamperForces = transpose(this.J) * DamperForces;
+            DamperForces = simple(transpose(this.J) * DamperForces);
         end
         
         function ExForces = buildExForces(this)
@@ -569,7 +577,7 @@ classdef DynModel2D
                 ExForces = this.ExForces;
                 return;
             end
-            ExForces = this.SpringForces + this.DamperForces;
+            ExForces = simple(this.SpringForces + this.DamperForces);
         end
         
         function RHS = buildRHS(this)
@@ -583,6 +591,7 @@ classdef DynModel2D
                 else
                  RHS{i} = [this.G + this.ExForces];   
                 end
+                RHS{i} = simple(RHS{i});
             end
         end
         
@@ -597,6 +606,7 @@ classdef DynModel2D
                 else
                    MM{i} = this.M; 
                 end
+                MM{i} = simple(MM{i});
             end
         end
         
