@@ -426,13 +426,14 @@ classdef DynModel2D
                             for k = 1:length(this.qs) %each state
                                 %Take the partial derivative of C(i,j) w.r.t.
                                 %to each dof
-                                Cdot(i,j) = Cdot{c}(i,j) + diff(C{c}(i,j),this.qs(k))*this.us(k);
+                                Cdot{c}(i,j) = Cdot{c}(i,j) + diff(C{c}(i,j),this.qs(k))*this.us(k);
                             end
                     end
                 end
+                Cdot{c} = simplify(Cdot{c});
             end
             
-            Cdot = simplify(Cdot);
+            
      
         end
         
@@ -480,13 +481,14 @@ classdef DynModel2D
                 return;
             end
             sz=size(this.M,1);
-            c = zeros(sz,sz,sz);
+            c = sym(zeros(sz,sz,sz));
+            CC = sym(zeros(sz,sz));
             for i=1:sz
                 for j=1:sz
                     for k=1:sz
-                        c(i,j,k)=1/2*(diff(D(i,j),this.qs(k)) + diff(D(i,k),this.qs(j)) - diff(D(k,j),this.qs(i)))*this.us(k);
+                        c(i,j,k)=1/2*(diff(this.M(i,j),this.qs(k)) + diff(this.M(i,k),this.qs(j)) - diff(this.M(k,j),this.qs(i)))*this.us(k);
                     end
-                    CC(i,j) = sum(c(j,i,:));
+                    CC(i,j) = sum(reshape(c(j,i,:),[sz 1]));
                 end
             end
             CC=simplify(CC);
