@@ -1,5 +1,5 @@
 r = DynModel2D;
-r.name = 'double_pendulum';
+r.name = 'DoublePendulum';
 
 % Create Bodies & Joints
 [r,shank] = r.addBody('shank','ground','hinge'); 
