@@ -8,9 +8,11 @@ classdef ModBuild2D
 %             'joint',cell(1),'angleoffset',0,'numjoints',0); %joint info structure
         springs = struct('body1',cell(1),'body2',cell(1),'type',cell(1),'name',cell(1),...
                          'restlength',cell(1),'attachvec1',cell(1),'attachvec2',cell(1),'numsprings',0);
-        dampers = struct('body1',cell(1),'body2',cell(1),'type',cell(1),'name',cell(1),'numdampers',0);
+        dampers = struct('body1',cell(1),'body2',cell(1),'type',cell(1),'name',cell(1),...
+                         'attachvec1',cell(1),'attachvec2',cell(1),'numdampers',0);
         phases = cell(1); %A cell array of the names of the phases
-        groundslopeangle = sym(0); %Angle of the ground
+        groundslopeangle = sym('0'); %Angle of the ground
+        g = sym('g');
         status = 0; % keeps track of whether new elements have been added/changed in the model     
     end
     
@@ -49,6 +51,10 @@ classdef ModBuild2D
         inertiasyms;
         lcomsyms;
         dsyms;
+        springsyms;
+        attachmentpointsyms;
+        dampersyms;
+        worldsyms;
     end
     
     
@@ -314,7 +320,8 @@ classdef ModBuild2D
          end
          
          function allsyms = get.allsyms(this)
-             allsyms = [this.masssyms this.inertiasyms this.lcomsyms this.dsyms];
+             allsyms = [this.masssyms this.inertiasyms this.lcomsyms this.dsyms...
+                        this.springsyms this.dampersyms this.worldsyms this.attachmentpointsyms];
          end
          
          function masssyms = get.masssyms(this)
@@ -351,6 +358,40 @@ classdef ModBuild2D
              
              dsyms = combinedsyms(length(othersyms)+1:end);
          end
+         
+         function springsyms = get.springsyms(this)
+             springsyms = [];
+             for i = 1:this.springs.numsprings
+                 springsyms = [springsyms this.springs.name{i} this.springs.restlength{i}];
+             end
+             springsyms = unique(springsyms,'stable');
+         end
+         
+         function dampersyms = get.dampersyms(this)
+             dampersyms = [];
+             for i = 1:this.dampers.numdampers
+                 dampersyms = [dampersyms this.dampers.name{i}];
+             end
+             dampersyms = unique(dampersyms,'stable');
+         end
+         
+         function worldsyms = get.worldsyms(this)
+            worldsyms = [this.g symvar(this.groundslopeangle)];
+         end
+         
+         function attachmentpointsyms = get.attachmentpointsyms(this)
+            othersyms = unique([this.lcomsyms this.qs.' this.dsyms this.springsyms],'stable');
+            attachmentpointsyms = [];
+            for i = 1:this.springs.numsprings
+                for j = 1:2
+                    attachmentpointsyms = [attachmentpointsyms symvar(this.springs.attachvec1{i}(j))...
+                                           symvar(this.springs.attachvec2{i}(j))];
+                end
+            end
+            combinedsyms = unique([othersyms attachmentpointsyms],'stable');
+            attachmentpointsyms = combinedsyms(length(othersyms)+1:end);
+         end
+         
          
         function numbodies = get.numbodies(this)
             numbodies = length(this.bodies);
@@ -392,7 +433,7 @@ classdef ModBuild2D
         end
         
         function gravity = get.gravity(this)
-            gravity = sym([0;-1]);
+            gravity = sym([0;this.g]);
             alpha = this.groundslopeangle;
             Rotation = [cos(alpha) sin(alpha); -sin(alpha) cos(alpha)];
             gravity = Rotation*gravity;
@@ -717,10 +758,32 @@ classdef ModBuild2D
             for i = 1:length(this.lcomsyms)
                 fprintf(fid,[char(this.lcomsyms(i)) ' = 1;\n']);
             end
-                        
+            
             fprintf(fid,'\n%%Distances from previous COM to joint\n');
             for i = 1:length(this.dsyms)
                 fprintf(fid,[char(this.dsyms(i)) ' = 1;\n']);
+            end
+            
+            fprintf(fid,'\n%%Springs\n');
+            for i = 1:length(this.springsyms)
+                fprintf(fid,[char(this.springsyms(i)) ' = 1;\n']);
+            end
+            
+            fprintf(fid,'\n%%Dampers\n');
+            for i = 1:length(this.dampersyms)
+                fprintf(fid,[char(this.dampersyms(i)) ' = 1;\n']);
+            end
+            
+            fprintf(fid,'\n%%World\n');
+            fprintf(fid,[char(this.g) ' = -1;\n']);
+            if length(this.worldsyms)>1
+                fprintf(fid,[char(this.groundslopeangle) ' = 0;\n']);
+            end
+            
+            
+            fprintf(fid,'\n%%Spring Attachment Points\n');
+            for i = 1:length(this.attachmentpointsyms)
+                fprintf(fid,[char(this.attachmentpointsyms(i)) ' = 1;\n']);
             end
             
             fprintf(fid,'end\n');
