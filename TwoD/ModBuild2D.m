@@ -655,6 +655,16 @@ classdef ModBuild2D
             end
         end
         
+        function export(this)
+            s = mkdir(this.name);
+            classdir = [cd '\' this.name '\'];
+            fid = fopen([classdir this.name],'w');
+            
+%             fprintf(fid,
+            
+            fclose(fid);
+        end
+        
         
         
         

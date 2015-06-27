@@ -1,4 +1,4 @@
-r = DynModel2D;
+r = ModBuild2D;
 r.name = 'DoublePendulum';
 
 % Create Bodies & Joints
