@@ -695,12 +695,39 @@ classdef ModBuild2D
                 mkdir(this.name);
             end
             classdir = [cd '\' this.name '\'];
-            fid = fopen([classdir this.name],'w');
+            fid = fopen([classdir this.name '.m'],'w');
             
+            %Class Definition
             fprintf(fid,['classdef ' this.name '\n']);
-            fprintf(fid,'DESCRIPTION GOES HERE\n')
+            fprintf(fid,'%%DESCRIPTION GOES HERE\n\n');
             
-%             for i 
+            fprintf(fid,'properties\n');
+            
+            fprintf(fid,'\n%%Masses\n');
+            for i = 1:length(this.masssyms)
+               fprintf(fid,[char(this.masssyms(i)) ' = 1;\n']);
+            end
+            
+            fprintf(fid,'\n%%Inertias\n');
+            for i = 1:length(this.inertiasyms)
+                fprintf(fid,[char(this.inertiasyms(i)) ' = 0;\n']);
+            end
+            
+            fprintf(fid,'\n%%Distances from joint to COM\n');
+            for i = 1:length(this.lcomsyms)
+                fprintf(fid,[char(this.lcomsyms(i)) ' = 1;\n']);
+            end
+                        
+            fprintf(fid,'\n%%Distances from previous COM to joint\n');
+            for i = 1:length(this.dsyms)
+                fprintf(fid,[char(this.dsyms(i)) ' = 1;\n']);
+            end
+            
+            fprintf(fid,'end\n');
+            
+            
+            
+           fprintf(fid,'end');
             
             fclose(fid);
         end
