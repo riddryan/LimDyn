@@ -23,7 +23,6 @@ classdef body2d
     
     properties (Dependent = true)
         bodyprops
-        allsyms;
         R; %Rotation Matrix from ground frame to body Frame
         xaxis; %xaxis of body frame
         yaxis; %yaxis of body frame
@@ -59,16 +58,6 @@ classdef body2d
             yaxis = this.R*[0;1];
         end
         
-        function allsyms = get.allsyms(this)
-            allsyms = {};
-            fnames = fieldnames(this.bodyprops);
-            for i = 1:length(fnames)
-                for j = 1:length(this.(fnames{i}))
-                    allsyms = [allsyms symvar(this.(fnames{i})(j))];
-                end
-            end
-            allsyms = unique(allsyms);
-        end
         
         function bodyprops = get.bodyprops(this)
             bodyprops.mass = this.mass;

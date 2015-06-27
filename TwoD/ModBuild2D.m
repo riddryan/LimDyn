@@ -45,6 +45,10 @@ classdef ModBuild2D
         qs;
         us;
         allsyms;
+        masssyms;
+        inertiasyms;
+        lcomsyms;
+        dsyms;
     end
     
     
@@ -310,11 +314,42 @@ classdef ModBuild2D
          end
          
          function allsyms = get.allsyms(this)
-             allsyms = {};
+             allsyms = [this.masssyms this.inertiasyms this.lcomsyms this.dsyms];
+         end
+         
+         function masssyms = get.masssyms(this)
+            masssyms = {};
+            for i = 1:this.numbodies
+               masssyms = [masssyms this.bodies(i).mass];
+            end
+         end
+         
+         function inertiasyms = get.inertiasyms(this)
+             inertiasyms = {};
              for i = 1:this.numbodies
-                     allsyms = [allsyms this.bodies(i).allsyms];
+                 inertiasyms = [inertiasyms this.bodies(i).inertia];
              end
-             allsyms = unique(allsyms);
+         end
+         
+         function lcomsyms = get.lcomsyms(this)
+             lcomsyms = {};
+             for i = 1:this.numbodies
+                 lcomsyms = [lcomsyms this.bodies(i).lcom];
+             end
+         end
+         
+         function dsyms = get.dsyms(this)
+             othersyms = unique([this.masssyms this.inertiasyms this.lcomsyms this.qs.'],'stable');
+             dsyms={};
+             for i = 1:this.numbodies;
+                 for j = 1:length(this.bodies(i).d)
+                     dsyms = [dsyms symvar(this.bodies(i).d(j))];
+                 end
+             end
+             
+             combinedsyms = unique([othersyms dsyms],'stable');
+             
+             dsyms = combinedsyms(length(othersyms)+1:end);
          end
          
         function numbodies = get.numbodies(this)
@@ -656,11 +691,16 @@ classdef ModBuild2D
         end
         
         function export(this)
-            s = mkdir(this.name);
+            if ~exist(this.name,'dir')
+                mkdir(this.name);
+            end
             classdir = [cd '\' this.name '\'];
             fid = fopen([classdir this.name],'w');
             
-%             fprintf(fid,
+            fprintf(fid,['classdef ' this.name '\n']);
+            fprintf(fid,'DESCRIPTION GOES HERE\n')
+            
+%             for i 
             
             fclose(fid);
         end
