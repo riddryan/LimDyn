@@ -732,10 +732,10 @@ classdef ModBuild2D
         end
         
         function export(this)
-            if ~exist(this.name,'dir')
-                mkdir(this.name);
+            if ~exist(['@' this.name],'dir')
+                mkdir(['@' this.name]);
             end
-            classdir = [cd '\' this.name '\'];
+            classdir = [cd '\@' this.name '\'];
             fid = fopen([classdir this.name '.m'],'w');
             
             %Class Definition
